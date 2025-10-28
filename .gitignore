@@ -1,0 +1,33 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Python Virtual Environment
+venv/
+.venv/
+
+# Saved Models and Data
+# Models can be several hundred MBs and should not be versioned.
+# Re-train the model from the source code instead.
+models/
+
+# IDE and Editor Directories
+.vscode/
+.idea/
+
+# Jupyter Notebook Checkpoints
+.ipynb_checkpoints/
+
+# Build, Distribution, and Egg Files
+build/
+dist/
+*.egg-info/
+
+# Log files
+*.log
+
+# OS-specific files
+.DS_Store
+Thumbs.db
