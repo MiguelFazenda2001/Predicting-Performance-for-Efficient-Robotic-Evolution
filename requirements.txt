@@ -1,1 +1,2 @@
-gymnsasium
+gymnasium
+gymnasium[all]
