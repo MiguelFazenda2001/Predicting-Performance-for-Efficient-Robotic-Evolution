@@ -1,7 +1,10 @@
 import gymnasium as gym
 
 # Initialise the environment
-env = gym.make("LunarLander-v3", render_mode="human")
+env = gym.make("LunarLander-v3",continuous=True,enable_wind=True,wind_power=15.0,turbulence_power=1.5, render_mode="human")
+print("Action space:", env.action_space)
+print("Observation space:", env.observation_space)
+
 
 # Reset the environment to generate the first observation
 observation, info = env.reset(seed=42)
