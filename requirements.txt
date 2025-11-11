@@ -1,2 +1,4 @@
 gymnasium
 gymnasium[all]
+pandas
+neat-python
