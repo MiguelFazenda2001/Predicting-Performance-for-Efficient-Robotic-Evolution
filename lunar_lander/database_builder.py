@@ -60,6 +60,8 @@ def eval_genome(genome, config, n_episodes, data_path="data"):
 
     all_episodes = []
 
+    all_rewards = []
+
     for episode_id in range(n_episodes):
         obs, _ = env.reset(seed=np.random.randint(1_000_000))
         total_reward = 0
@@ -80,23 +82,23 @@ def eval_genome(genome, config, n_episodes, data_path="data"):
             if terminated or truncated:
                 break
 
+        all_rewards.append(total_reward)
+        
         elapsed_time = time.time() - start_time
 
         # success heuristic (can be improved)
-        success = total_reward > 100
+        success = total_reward > 200
 
         # Serialize to JSON strings so each episode fits in one CSV cell
         episode_data = {
             "generation": current_generation,
             "genome_id": getattr(genome, "key", None),
             "episode_id": episode_id,
-            "total_reward": total_reward,
             "num_steps": len(rewards),
             "duration_sec": elapsed_time,
             "success": success,
             "observations": json.dumps(observations),
             "actions": json.dumps(actions),
-            "rewards": json.dumps(rewards),
         }
 
         all_episodes.append(episode_data)
@@ -107,7 +109,7 @@ def eval_genome(genome, config, n_episodes, data_path="data"):
     #print(f"🧾 Logged {len(df)} episodes for genome {getattr(genome, 'key', 'unknown')} → {csv_path}")
 
     env.close()
-    return df["total_reward"].mean()
+    return np.mean(all_rewards)
 # --- Evaluate an entire population ---
 def eval_population(genomes, config, data_path, n_episodes):
     for genome_id, genome in genomes:
