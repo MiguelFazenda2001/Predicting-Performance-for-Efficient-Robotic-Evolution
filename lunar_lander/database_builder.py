@@ -36,8 +36,11 @@ import glob
 # +10 for leg contact
 # + 200 for solved
 STEP_LIMIT = 500
+MASTER_CSV = "dataset.csv"
 
 current_generation = 0
+evo = 0
+
 
 class GenerationTracker(neat.reporting.BaseReporter):
     def start_generation(self, generation):
@@ -58,14 +61,14 @@ def eval_genome(genome, config, n_episodes, data_path="data"):
     net = neat.nn.FeedForwardNetwork.create(genome, config)
     os.makedirs(data_path, exist_ok=True)
 
-    all_episodes = []
+    all_episodes, success, duration = [], [], []
 
     all_rewards = []
 
     for episode_id in range(n_episodes):
         obs, _ = env.reset(seed=np.random.randint(1_000_000))
         total_reward = 0
-        rewards, observations, actions = [], [], []
+        rewards, observations, actions =  [], [], []
 
         for _ in range(STEP_LIMIT):
             observations.append(obs.tolist())
@@ -82,30 +85,45 @@ def eval_genome(genome, config, n_episodes, data_path="data"):
 
         all_rewards.append(total_reward)
 
+        duration.append(len(rewards) / env.metadata.get("render_fps"))
+
         # success heuristic (can be improved)
-        success = total_reward > 200
+        if total_reward >= 200:
+            success.append(1)
+        else:
+            success.append(0)
 
         # Serialize to JSON strings so each episode fits in one CSV cell
         episode_data = {
+            "evolution": evo,
             "generation": current_generation,
             "genome_id": getattr(genome, "key", None),
             "episode_id": episode_id,
             "num_steps": len(rewards),
-            "duration_sec": len(rewards) / env.metadata.get("render_fps"),
-            "success": success,
+            "avg_duration": 0,
+            "success_rate": 0,
             "observations": json.dumps(observations),
             "actions": json.dumps(actions),
         }
 
         all_episodes.append(episode_data)
 
+        # ---- Compute averages ----
+    avg_duration = np.mean(duration)
+    success_rate = np.sum(success)/n_episodes
+
+    # Add averages as *repeated metadata* (same value on every row)
     df = pd.DataFrame(all_episodes)
-    csv_path = os.path.join(data_path, f"gen_{current_generation}_genome_{getattr(genome, 'key', 'unknown')}.csv")
-    df.to_csv(csv_path, index=False)
+    df["avg_duration"] = avg_duration
+    df["success_rate"] = success_rate
+
+    csv_path = os.path.join(data_path, MASTER_CSV)
+    df.to_csv(csv_path, mode="a", header=False, index=False)
     #print(f"🧾 Logged {len(df)} episodes for genome {getattr(genome, 'key', 'unknown')} → {csv_path}")
 
     env.close()
     return np.mean(all_rewards)
+
 # --- Evaluate an entire population ---
 def eval_population(genomes, config, data_path, n_episodes):
     for genome_id, genome in genomes:
@@ -150,6 +168,7 @@ def run_neat(config_file, model_path="models/temp.pkl", data_path="data", genera
         if terminated or truncated:
             break
     print("Final test reward:", total_reward)
+
     env.close()
 
 
@@ -168,21 +187,27 @@ def merge_csv_files(data_path="data", output_file="all_episodes.csv"):
     print(f"Total rows: {len(df)}")
 
 def delete_temp_csv_files(data_path="data"):
-    csv_files = glob.glob(os.path.join(data_path, "gen_*.csv"))
+    csv_files = glob.glob(os.path.join(data_path, "evo_*.csv"))
     for f in csv_files:
         os.remove(f)
     print(f"Deleted {len(csv_files)} temporary CSV files from {data_path}")    
 
 if __name__ == "__main__":
-    evo = 1
-
     local_dir = os.path.dirname(__file__)
     config_path = os.path.join(local_dir, "config-feedforward.txt")
-    model_path = os.path.join(local_dir, "models", f"evolution_{evo}.pkl")
     data_path = os.path.join(local_dir, "data")
+    master_csv = os.path.join(data_path, MASTER_CSV)
 
-    run_neat(config_path, model_path, data_path, 1, 10)
+    if not os.path.exists(master_csv):
+        pd.DataFrame(columns=[
+            "evolution", "generation", "genome_id", "episode_id", "num_steps",
+            "avg_duration", "success_rate", "observations", "actions"
+        ]).to_csv(master_csv, index=False)
 
-    merge_csv_files(data_path)
+    for evo in range(1):
+        generations = 1
+        episodes_per_genome = 10
 
-    delete_temp_csv_files(data_path)
+        model_path = os.path.join(local_dir, "models", f"evolution_{evo}.pkl")
+
+        run_neat(config_path, model_path, data_path, generations, episodes_per_genome)
