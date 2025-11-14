@@ -35,7 +35,7 @@ import glob
 # -100 crash
 # +10 for leg contact
 # + 200 for solved
-
+STEP_LIMIT = 500
 
 current_generation = 0
 
@@ -67,9 +67,7 @@ def eval_genome(genome, config, n_episodes, data_path="data"):
         total_reward = 0
         rewards, observations, actions = [], [], []
 
-        start_time = time.time()
-
-        for _ in range(500):
+        for _ in range(STEP_LIMIT):
             observations.append(obs.tolist())
             action_values = net.activate(obs)
             action = np.clip(action_values, -1.0, 1.0)
@@ -83,8 +81,6 @@ def eval_genome(genome, config, n_episodes, data_path="data"):
                 break
 
         all_rewards.append(total_reward)
-        
-        elapsed_time = time.time() - start_time
 
         # success heuristic (can be improved)
         success = total_reward > 200
@@ -95,7 +91,7 @@ def eval_genome(genome, config, n_episodes, data_path="data"):
             "genome_id": getattr(genome, "key", None),
             "episode_id": episode_id,
             "num_steps": len(rewards),
-            "duration_sec": elapsed_time,
+            "duration_sec": len(rewards) / env.metadata.get("render_fps"),
             "success": success,
             "observations": json.dumps(observations),
             "actions": json.dumps(actions),

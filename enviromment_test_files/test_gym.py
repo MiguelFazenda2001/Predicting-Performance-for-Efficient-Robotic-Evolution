@@ -5,10 +5,10 @@ env = gym.make("LunarLander-v3",continuous=True,enable_wind=True,wind_power=15.0
 print("Action space:", env.action_space)
 print("Observation space:", env.observation_space)
 
-
 # Reset the environment to generate the first observation
 observation, info = env.reset(seed=42)
 for _ in range(500):
+
     # this is where you would insert your policy
     action = env.action_space.sample()
 
