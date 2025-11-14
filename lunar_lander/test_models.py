@@ -22,7 +22,7 @@ def test_saved_model(config_file, model_path="models/temp.pkl"):
     net = neat.nn.FeedForwardNetwork.create(genome, config)
 
     env = gym.make("LunarLander-v3", continuous=True, enable_wind=True, wind_power=15.0, turbulence_power=1.5, render_mode="human")
-    obs, _ = env.reset(seed=np.random.randint(10000000))
+    obs, _ = env.reset(seed=None)
     total_reward = 0
     for _ in range(500):
         action = np.clip(net.activate(obs), -1.0, 1.0)
@@ -35,7 +35,7 @@ def test_saved_model(config_file, model_path="models/temp.pkl"):
     env.close()
 
 if __name__ == "__main__":
-    evo = 1
+    evo = 0
 
     local_dir = os.path.dirname(__file__)
     config_path = os.path.join(local_dir, "config-feedforward.txt")

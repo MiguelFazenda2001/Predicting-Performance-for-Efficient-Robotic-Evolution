@@ -66,7 +66,7 @@ def eval_genome(genome, config, n_episodes, data_path="data"):
     all_rewards = []
 
     for episode_id in range(n_episodes):
-        obs, _ = env.reset(seed=np.random.randint(1_000_000))
+        obs, _ = env.reset(seed=None)
         total_reward = 0
         rewards, observations, actions =  [], [], []
 
