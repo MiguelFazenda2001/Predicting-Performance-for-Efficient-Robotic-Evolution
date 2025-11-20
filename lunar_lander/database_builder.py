@@ -85,7 +85,7 @@ def eval_genome(genome, config, n_episodes, data_path="data"):
 
         all_rewards.append(total_reward)
 
-        duration.append(len(rewards) / env.metadata.get("render_fps"))
+        duration.append(len(rewards) / float(env.metadata.get("render_fps")))
 
         # success heuristic (can be improved)
         if total_reward >= 200:
