@@ -110,7 +110,7 @@ def eval_genome(genome, config, n_episodes, data_path="data"):
 
         # ---- Compute averages ----
     avg_duration = np.mean(duration)
-    success_rate = np.sum(success)/n_episodes
+    success_rate = np.sum(success)/float(n_episodes)
 
     # Add averages as *repeated metadata* (same value on every row)
     df = pd.DataFrame(all_episodes)
