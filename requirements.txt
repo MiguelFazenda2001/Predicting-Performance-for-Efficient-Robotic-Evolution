@@ -2,3 +2,4 @@ gymnasium
 gymnasium[all]
 pandas
 neat-python
+scikit-learn
