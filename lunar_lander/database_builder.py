@@ -4,9 +4,9 @@ import neat
 import os
 import pickle
 import pandas as pd
-import time
 import json
 import glob
+import argparse
 
 # ation space: Discrete(4)
 # 0 -> do nothing
@@ -36,7 +36,7 @@ import glob
 # +10 for leg contact
 # + 200 for solved
 STEP_LIMIT = 500
-MASTER_CSV = "dataset.csv"
+DATA_CSV = "data/dataset.csv"
 
 current_generation = 0
 evo = 0
@@ -49,7 +49,7 @@ class GenerationTracker(neat.reporting.BaseReporter):
 
 
 # --- Evaluate one genome ---
-def eval_genome(genome, config, n_episodes, data_path="data"):
+def eval_genome(genome, config, n_episodes):
     """Evaluate a genome and log one CSV row per simulation, keeping the full time series."""
     env = gym.make(
         "LunarLander-v3",
@@ -59,7 +59,6 @@ def eval_genome(genome, config, n_episodes, data_path="data"):
         turbulence_power=1.5,
     )
     net = neat.nn.FeedForwardNetwork.create(genome, config)
-    os.makedirs(data_path, exist_ok=True)
 
     all_episodes, success, duration = [], [], []
 
@@ -117,20 +116,19 @@ def eval_genome(genome, config, n_episodes, data_path="data"):
     df["avg_duration"] = avg_duration
     df["success_rate"] = success_rate
 
-    csv_path = os.path.join(data_path, MASTER_CSV)
-    df.to_csv(csv_path, mode="a", header=False, index=False)
+    df.to_csv(DATA_CSV, mode="a", header=False, index=False)
     #print(f"🧾 Logged {len(df)} episodes for genome {getattr(genome, 'key', 'unknown')} → {csv_path}")
 
     env.close()
     return np.mean(all_rewards)
 
 # --- Evaluate an entire population ---
-def eval_population(genomes, config, data_path, n_episodes):
+def eval_population(genomes, config, n_episodes):
     for genome_id, genome in genomes:
-        genome.fitness = eval_genome(genome, config, n_episodes, data_path)
+        genome.fitness = eval_genome(genome, config, n_episodes)
 
 # --- Main ---
-def run_neat(config_file, model_path="models/temp.pkl", data_path="data", generations=100, n_episodes=10):
+def run_neat(config_file, model_path="models/temp.pkl", generations=100, n_episodes=10):
     config = neat.Config(
         neat.DefaultGenome,
         neat.DefaultReproduction,
@@ -146,7 +144,7 @@ def run_neat(config_file, model_path="models/temp.pkl", data_path="data", genera
     population.add_reporter(GenerationTracker())
 
     # Run for up to 100 generations
-    winner = population.run(lambda genomes, config: eval_population(genomes, config, data_path, n_episodes), generations)
+    winner = population.run(lambda genomes, config: eval_population(genomes, config, n_episodes), generations)
 
     print("\nBest genome:\n", winner)
 
@@ -157,6 +155,7 @@ def run_neat(config_file, model_path="models/temp.pkl", data_path="data", genera
     print(f"Best genome saved to {model_path}")
 
     # Test the best network visually
+    """
     env = gym.make("LunarLander-v3",continuous=True,enable_wind=True,wind_power=15.0,turbulence_power=1.5, render_mode="human")
     observation, _ = env.reset()
     net = neat.nn.FeedForwardNetwork.create(winner, config)
@@ -170,44 +169,51 @@ def run_neat(config_file, model_path="models/temp.pkl", data_path="data", genera
     print("Final test reward:", total_reward)
 
     env.close()
+    """
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Run NEAT evolutions")
 
-def merge_csv_files(data_path="data", output_file="all_episodes.csv"):
-    # Get all CSV files in that folder
-    csv_files = glob.glob(os.path.join(data_path, "*.csv"))
+    parser.add_argument(
+        "--evolutions",
+        type=int,
+        default=1,
+        help="Number of evolutions to run"
+    )
 
-    # Load and merge them all
-    df = pd.concat((pd.read_csv(f) for f in csv_files), ignore_index=True)
+    parser.add_argument(
+        "--generations",
+        type=int,
+        default=125,
+        help="Number of generations per evolution"
+    )
 
-    # Save combined dataset
-    merged_path = os.path.join(data_path, output_file)
-    df.to_csv(merged_path, index=False)
+    parser.add_argument(
+        "--episodes",
+        type=int,
+        default=10,
+        help="Episodes per genome"
+    )
 
-    print(f"Merged {len(csv_files)} CSV files into: {merged_path}")
-    print(f"Total rows: {len(df)}")
-
-def delete_temp_csv_files(data_path="data"):
-    csv_files = glob.glob(os.path.join(data_path, "evo_*.csv"))
-    for f in csv_files:
-        os.remove(f)
-    print(f"Deleted {len(csv_files)} temporary CSV files from {data_path}")    
+    return parser.parse_args()
 
 if __name__ == "__main__":
+    args = parse_args()
+
     local_dir = os.path.dirname(__file__)
     config_path = os.path.join(local_dir, "config-feedforward.txt")
-    data_path = os.path.join(local_dir, "data")
-    master_csv = os.path.join(data_path, MASTER_CSV)
-
-    if not os.path.exists(master_csv):
+    
+    if not os.path.exists(DATA_CSV):
         pd.DataFrame(columns=[
             "evolution", "generation", "genome_id", "episode_id", "num_steps",
             "avg_duration", "success_rate", "observations", "actions"
-        ]).to_csv(master_csv, index=False)
+        ]).to_csv(DATA_CSV, index=False)
 
-    for evo in range(1):
-        generations = 1
-        episodes_per_genome = 10
+    n_evolutions = args.evolutions
+    generations = args.generations
+    episodes_per_genome = args.episodes
 
+    for evo in range(n_evolutions):
         model_path = os.path.join(local_dir, "models", f"evolution_{evo}.pkl")
 
-        run_neat(config_path, model_path, data_path, generations, episodes_per_genome)
+        run_neat(config_path, model_path, generations, episodes_per_genome)
