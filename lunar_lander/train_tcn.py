@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 from tcn import EpisodeTCN, EpisodeDataset
 from tqdm import tqdm
+import os
 
 import torch
 import torch.nn as nn
@@ -88,6 +89,11 @@ def data_processing():
     mean = X.mean(axis=(0,1), keepdims=True)
     std = X.std(axis=(0,1), keepdims=True) + 1e-6
     X = (X - mean) / std
+
+    # SAVE normalization stats
+    os.makedirs("models", exist_ok=True)
+    np.save("models/x_mean.npy", mean)
+    np.save("models/x_std.npy", std)
 
     X_train, X_val, y_train, y_val = train_test_split(
         X, y,
