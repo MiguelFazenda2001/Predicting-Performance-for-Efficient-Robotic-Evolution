@@ -2,6 +2,7 @@ import ast
 import numpy as np
 import pandas as pd
 from tcn import EpisodeTCN, EpisodeDataset
+from tqdm import tqdm
 
 import torch
 import torch.nn as nn
@@ -86,21 +87,25 @@ def data_processing():
         shuffle=True
     )
 
-    train_loader = DataLoader(EpisodeDataset(X_train, y_train), batch_size=64, shuffle=True, pin_memory=True)
+    train_loader = DataLoader(EpisodeDataset(X_train, y_train), batch_size=128, shuffle=True, pin_memory=True)
 
-    val_loader = DataLoader(EpisodeDataset(X_val, y_val), batch_size=64, shuffle=False, pin_memory=True)
+    val_loader = DataLoader(EpisodeDataset(X_val, y_val), batch_size=128, shuffle=False, pin_memory=True)
 
-    return train_loader, val_loader
+    return train_loader, val_loader, X
 
 
-def train_tcn(data_loader):
+def train_tcn(data_loader, X, epochs=50):
     model = EpisodeTCN(input_dim=X.shape[2]).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     loss_fn = nn.MSELoss()
 
-    for epoch in range(50):
-        total = 0
-        for xb, yb in data_loader:
+    
+
+    for epoch in range(epochs):
+        model.train()
+        loop = tqdm(data_loader, desc=f"Epoch {epoch+1}/{epochs}")
+
+        for xb, yb in loop:
             xb = xb.to(device, non_blocking=True)
             yb = yb.to(device, non_blocking=True)
 
@@ -109,9 +114,12 @@ def train_tcn(data_loader):
             loss = loss_fn(pred, yb)
             loss.backward()
             optimizer.step()
-            total += loss.item()
 
-        print(f"Epoch {epoch}: {total / len(data_loader):.4f}")
+            # Update progress bar with current loss
+            loop.set_postfix(loss=loss.item())
+
+        metrics = evaluate(model, val_loader)
+        print(f"Epoch {epoch+1}: val_mse_success={metrics['mse_success']:.4f}, val_mse_duration={metrics['mse_duration']:.4f}")
 
     torch.save(model.state_dict(), "models/tcn_model.pth")
     
@@ -119,8 +127,8 @@ def train_tcn(data_loader):
 
 
 if __name__ == "__main__":
-    train_loader, val_loader = data_processing()
-    model = train_tcn(train_loader)
+    train_loader, val_loader, X = data_processing()
+    model = train_tcn(train_loader, X)
     metrics = evaluate(model, val_loader)
     print(metrics)
 
