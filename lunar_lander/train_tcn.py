@@ -54,26 +54,35 @@ def evaluate(model, loader):
     }
 
 def data_processing():
-    # Load dataset
-    df = pd.read_csv(DATA_CSV)
-    df["obs"] = df["observations"].apply(parse_array)
-    df["acts"] = df["actions"].apply(parse_array)
+    chunksize = 50_000  # tune for your RAM (50k–200k usually good)
 
-    # Prepare input and output arrays
-    X_list, y_list = [], []
+    X_chunks = []
+    y_chunks = []
 
-    for _, row in df.iterrows():
-        X = np.concatenate([row["obs"], row["acts"]], axis=1)
-        y = np.array([
-            row["success_rate"],
-            row["avg_duration"]
-        ], dtype=np.float32)
+    for chunk in pd.read_csv(DATA_CSV, chunksize=chunksize):
+        # Parse arrays
+        obs = chunk["observations"].apply(parse_array).to_numpy()
+        acts = chunk["actions"].apply(parse_array).to_numpy()
 
-        X_list.append(X)
-        y_list.append(y)
+        # Determine feature dimension once
+        feat_dim = obs[0].shape[1] + acts[0].shape[1]
 
-    X = np.stack([pad_or_truncate(x, MAX_LEN) for x in X_list])
-    y = np.stack(y_list)
+        # Allocate padded batch
+        X_batch = np.zeros((len(chunk), MAX_LEN, feat_dim), dtype=np.float32)
+
+        for i, (o, a) in enumerate(zip(obs, acts)):
+            seq = np.concatenate([o, a], axis=1)
+            length = min(len(seq), MAX_LEN)
+            X_batch[i, :length] = seq[:length]
+
+        y_batch = chunk[["success_rate", "avg_duration"]].to_numpy(dtype=np.float32)
+
+        X_chunks.append(X_batch)
+        y_chunks.append(y_batch)
+
+    # Concatenate all chunks
+    X = np.concatenate(X_chunks, axis=0)
+    y = np.concatenate(y_chunks, axis=0)
 
     # Normalize inputs
     mean = X.mean(axis=(0,1), keepdims=True)
