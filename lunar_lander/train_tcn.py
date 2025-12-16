@@ -52,62 +52,75 @@ def evaluate(model, loader):
         "r2_duration": r2_score(y_true[:,1], y_pred[:,1]),
     }
 
-# Load dataset
-df = pd.read_csv(DATA_CSV)
-df["obs"] = df["observations"].apply(parse_array)
-df["acts"] = df["actions"].apply(parse_array)
+def data_processing():
+    # Load dataset
+    df = pd.read_csv(DATA_CSV)
+    df["obs"] = df["observations"].apply(parse_array)
+    df["acts"] = df["actions"].apply(parse_array)
 
-# Prepare input and output arrays
-X_list, y_list = [], []
+    # Prepare input and output arrays
+    X_list, y_list = [], []
 
-for _, row in df.iterrows():
-    X = np.concatenate([row["obs"], row["acts"]], axis=1)
-    y = np.array([
-        row["success_rate"],
-        row["avg_duration"]
-    ], dtype=np.float32)
+    for _, row in df.iterrows():
+        X = np.concatenate([row["obs"], row["acts"]], axis=1)
+        y = np.array([
+            row["success_rate"],
+            row["avg_duration"]
+        ], dtype=np.float32)
 
-    X_list.append(X)
-    y_list.append(y)
+        X_list.append(X)
+        y_list.append(y)
 
-X = np.stack([pad_or_truncate(x, MAX_LEN) for x in X_list])
-y = np.stack(y_list)
+    X = np.stack([pad_or_truncate(x, MAX_LEN) for x in X_list])
+    y = np.stack(y_list)
 
-# Normalize inputs
-mean = X.mean(axis=(0,1), keepdims=True)
-std = X.std(axis=(0,1), keepdims=True) + 1e-6
-X = (X - mean) / std
+    # Normalize inputs
+    mean = X.mean(axis=(0,1), keepdims=True)
+    std = X.std(axis=(0,1), keepdims=True) + 1e-6
+    X = (X - mean) / std
 
-X_train, X_val, y_train, y_val = train_test_split(
-    X, y,
-    test_size=0.2,
-    random_state=42,
-    shuffle=True
-)
+    X_train, X_val, y_train, y_val = train_test_split(
+        X, y,
+        test_size=0.2,
+        random_state=42,
+        shuffle=True
+    )
 
-train_loader = DataLoader(EpisodeDataset(X_train, y_train), batch_size=64, shuffle=True, pin_memory=True)
+    train_loader = DataLoader(EpisodeDataset(X_train, y_train), batch_size=64, shuffle=True, pin_memory=True)
 
-val_loader = DataLoader(EpisodeDataset(X_val, y_val), batch_size=64, shuffle=False, pin_memory=True)
+    val_loader = DataLoader(EpisodeDataset(X_val, y_val), batch_size=64, shuffle=False, pin_memory=True)
 
-model = EpisodeTCN(input_dim=X.shape[2]).to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-loss_fn = nn.MSELoss()
+    return train_loader, val_loader
 
-for epoch in range(50):
-    total = 0
-    for xb, yb in train_loader:
-        xb = xb.to(device, non_blocking=True)
-        yb = yb.to(device, non_blocking=True)
 
-        optimizer.zero_grad()
-        pred = model(xb)
-        loss = loss_fn(pred, yb)
-        loss.backward()
-        optimizer.step()
-        total += loss.item()
+def train_tcn(data_loader):
+    model = EpisodeTCN(input_dim=X.shape[2]).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    loss_fn = nn.MSELoss()
 
-    print(f"Epoch {epoch}: {total / len(train_loader):.4f}")
+    for epoch in range(50):
+        total = 0
+        for xb, yb in data_loader:
+            xb = xb.to(device, non_blocking=True)
+            yb = yb.to(device, non_blocking=True)
 
-metrics = evaluate(model, val_loader)
-print(metrics)
-torch.save(model.state_dict(), "models/tcn_model.pth")
+            optimizer.zero_grad()
+            pred = model(xb)
+            loss = loss_fn(pred, yb)
+            loss.backward()
+            optimizer.step()
+            total += loss.item()
+
+        print(f"Epoch {epoch}: {total / len(data_loader):.4f}")
+
+    torch.save(model.state_dict(), "models/tcn_model.pth")
+    
+    return model    
+
+
+if __name__ == "__main__":
+    train_loader, val_loader = data_processing()
+    model = train_tcn(train_loader)
+    metrics = evaluate(model, val_loader)
+    print(metrics)
+
