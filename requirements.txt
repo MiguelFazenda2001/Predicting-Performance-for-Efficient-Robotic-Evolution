@@ -3,3 +3,4 @@ gymnasium[all]
 pandas
 neat-python
 scikit-learn
+h5py

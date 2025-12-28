@@ -7,6 +7,7 @@ import pandas as pd
 import json
 import glob
 import argparse
+import h5py
 
 # ation space: Discrete(4)
 # 0 -> do nothing
@@ -36,7 +37,8 @@ import argparse
 # +10 for leg contact
 # + 200 for solved
 STEP_LIMIT = 500
-DATA_CSV = "data/dataset.csv"
+#DATA_CSV = "data/dataset.csv"
+H5_PATH = "data/episodes.h5"
 
 current_generation = 0
 evo = 0
@@ -47,10 +49,8 @@ class GenerationTracker(neat.reporting.BaseReporter):
         global current_generation
         current_generation = generation
 
-
 # --- Evaluate one genome ---
 def eval_genome(genome, config, n_episodes):
-    """Evaluate a genome and log one CSV row per simulation, keeping the full time series."""
     env = gym.make(
         "LunarLander-v3",
         continuous=True,
@@ -58,69 +58,66 @@ def eval_genome(genome, config, n_episodes):
         wind_power=15.0,
         turbulence_power=1.5,
     )
+
     net = neat.nn.FeedForwardNetwork.create(genome, config)
 
-    all_episodes, success, duration = [], [], []
+    success_count = 0
+    durations = []
+    total_rewards = []
 
-    all_rewards = []
+    base_path = (
+        f"evo_{evo}/"
+        f"gen_{current_generation}/"
+        f"genome_{genome.key}"
+    )
 
-    for episode_id in range(n_episodes):
-        obs, _ = env.reset(seed=None)
-        total_reward = 0
-        rewards, observations, actions =  [], [], []
+    with h5py.File(H5_PATH, "a") as h5:
+        for episode_id in range(n_episodes):
+            obs, _ = env.reset()
+            observations, actions = [], []
+            total_reward = 0
 
-        for _ in range(STEP_LIMIT):
-            observations.append(obs.tolist())
-            action_values = net.activate(obs)
-            action = np.clip(action_values, -1.0, 1.0)
-            actions.append(action.tolist())
+            for step in range(STEP_LIMIT):
+                observations.append(obs)
+                action = np.clip(net.activate(obs), -1.0, 1.0)
+                actions.append(action)
 
-            obs, reward, terminated, truncated, _ = env.step(action)
-            rewards.append(reward)
-            total_reward += reward
+                obs, reward, terminated, truncated, _ = env.step(action)
+                total_reward += reward
 
-            if terminated or truncated:
-                break
+                if terminated or truncated:
+                    break
 
-        all_rewards.append(total_reward)
+            duration = step / env.metadata["render_fps"]
+            durations.append(duration)
+            total_rewards.append(total_reward)
 
-        duration.append(len(rewards) / float(env.metadata.get("render_fps")))
+            if total_reward >= 200:
+                success_count += 1
 
-        # success heuristic (can be improved)
-        if total_reward >= 200:
-            success.append(1)
-        else:
-            success.append(0)
+            ep_grp = h5.create_group(f"{base_path}/ep_{episode_id}")
+            ep_grp.create_dataset(
+                "observations",
+                data=np.asarray(observations),
+                compression="gzip",
+                compression_opts=4
+            )
+            ep_grp.create_dataset(
+                "actions",
+                data=np.asarray(actions),
+                compression="gzip",
+                compression_opts=4
+            )
+            #ep_grp.attrs["reward"] = total_reward
+            #ep_grp.attrs["duration"] = duration
 
-        # Serialize to JSON strings so each episode fits in one CSV cell
-        episode_data = {
-            "evolution": evo,
-            "generation": current_generation,
-            "genome_id": getattr(genome, "key", None),
-            "episode_id": episode_id,
-            "num_steps": len(rewards),
-            "avg_duration": 0,
-            "success_rate": 0,
-            "observations": json.dumps(observations),
-            "actions": json.dumps(actions),
-        }
-
-        all_episodes.append(episode_data)
-
-        # ---- Compute averages ----
-    avg_duration = np.mean(duration)
-    success_rate = np.sum(success)/float(n_episodes)
-
-    # Add averages as *repeated metadata* (same value on every row)
-    df = pd.DataFrame(all_episodes)
-    df["avg_duration"] = avg_duration
-    df["success_rate"] = success_rate
-
-    df.to_csv(DATA_CSV, mode="a", header=False, index=False)
-    #print(f"🧾 Logged {len(df)} episodes for genome {getattr(genome, 'key', 'unknown')} → {csv_path}")
+        # ---- finalize genome-level metadata ----
+        genome_grp = h5[base_path]
+        genome_grp.attrs["success_rate"] = success_count / n_episodes
+        genome_grp.attrs["avg_duration"] = float(np.mean(durations))
 
     env.close()
-    return np.mean(all_rewards)
+    return np.mean(total_rewards)
 
 # --- Evaluate an entire population ---
 def eval_population(genomes, config, n_episodes):
@@ -203,12 +200,13 @@ if __name__ == "__main__":
     local_dir = os.path.dirname(__file__)
     config_path = os.path.join(local_dir, "config-feedforward.txt")
     
+    """
     if not os.path.exists(DATA_CSV):
         pd.DataFrame(columns=[
             "evolution", "generation", "genome_id", "episode_id", "num_steps",
             "avg_duration", "success_rate", "observations", "actions"
         ]).to_csv(DATA_CSV, index=False)
-
+    """
     n_evolutions = args.evolutions
     generations = args.generations
     episodes_per_genome = args.episodes

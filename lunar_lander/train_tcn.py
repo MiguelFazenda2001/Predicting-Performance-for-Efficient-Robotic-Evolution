@@ -4,6 +4,7 @@ import pandas as pd
 from tcn import EpisodeTCN, EpisodeDataset
 from tqdm import tqdm
 import os
+import h5py
 
 import torch
 import torch.nn as nn
@@ -17,7 +18,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
 
-DATA_CSV = "data/dataset.csv"
+H5_PATH = "data/episodes.h5"
 MAX_LEN = 500
 
 def parse_array(s):
@@ -54,60 +55,70 @@ def evaluate(model, loader):
         "r2_duration": r2_score(y_true[:,1], y_pred[:,1]),
     }
 
-def data_processing():
-    chunksize = 50_000  # tune for your RAM (50k–200k usually good)
+def data_processing_h5(h5_path=H5_PATH, max_len=MAX_LEN):
+    X_list = []
+    y_list = []
 
-    X_chunks = []
-    y_chunks = []
+    with h5py.File(h5_path, "r") as h5:
+        for evo in h5.values():
+            for gen in evo.values():
+                for genome in gen.values():
+                    if "success_rate" not in genome.attrs:
+                        continue
 
-    for chunk in pd.read_csv(DATA_CSV, chunksize=chunksize):
-        # Parse arrays
-        obs = chunk["observations"].apply(parse_array).to_numpy()
-        acts = chunk["actions"].apply(parse_array).to_numpy()
+                    y = np.array(
+                        [genome.attrs["success_rate"],
+                         genome.attrs["avg_duration"]],
+                        dtype=np.float32
+                    )
 
-        # Determine feature dimension once
-        feat_dim = obs[0].shape[1] + acts[0].shape[1]
+                    for ep in genome.values():
+                        obs = ep["observations"][:]
+                        acts = ep["actions"][:]
 
-        # Allocate padded batch
-        X_batch = np.zeros((len(chunk), MAX_LEN, feat_dim), dtype=np.float32)
+                        seq = np.concatenate([obs, acts], axis=1)
 
-        for i, (o, a) in enumerate(zip(obs, acts)):
-            seq = np.concatenate([o, a], axis=1)
-            length = min(len(seq), MAX_LEN)
-            X_batch[i, :length] = seq[:length]
+                        # pad / truncate
+                        if len(seq) >= max_len:
+                            seq = seq[:max_len]
+                        else:
+                            pad = np.zeros((max_len - len(seq), seq.shape[1]), dtype=np.float32)
+                            seq = np.vstack([seq, pad])
 
-        y_batch = chunk[["success_rate", "avg_duration"]].to_numpy(dtype=np.float32)
+                        X_list.append(seq)
+                        y_list.append(y)
 
-        X_chunks.append(X_batch)
-        y_chunks.append(y_batch)
+    X = np.asarray(X_list, dtype=np.float32)
+    y = np.asarray(y_list, dtype=np.float32)
 
-    # Concatenate all chunks
-    X = np.concatenate(X_chunks, axis=0)
-    y = np.concatenate(y_chunks, axis=0)
-
-    # Normalize inputs
+    # Normalize
     mean = X.mean(axis=(0,1), keepdims=True)
     std = X.std(axis=(0,1), keepdims=True) + 1e-6
     X = (X - mean) / std
 
-    # SAVE normalization stats
     os.makedirs("models", exist_ok=True)
     np.save("models/x_mean.npy", mean)
     np.save("models/x_std.npy", std)
 
     X_train, X_val, y_train, y_val = train_test_split(
-        X, y,
-        test_size=0.2,
-        random_state=42,
-        shuffle=True
+        X, y, test_size=0.2, random_state=42, shuffle=True
     )
 
-    train_loader = DataLoader(EpisodeDataset(X_train, y_train), batch_size=128, shuffle=True, pin_memory=True)
+    train_loader = DataLoader(
+        EpisodeDataset(X_train, y_train),
+        batch_size=128,
+        shuffle=True,
+        pin_memory=True
+    )
 
-    val_loader = DataLoader(EpisodeDataset(X_val, y_val), batch_size=128, shuffle=False, pin_memory=True)
+    val_loader = DataLoader(
+        EpisodeDataset(X_val, y_val),
+        batch_size=128,
+        shuffle=False,
+        pin_memory=True
+    )
 
     return train_loader, val_loader, X
-
 
 def train_tcn(data_loader, X, epochs=50):
     model = EpisodeTCN(input_dim=X.shape[2]).to(device)
@@ -142,7 +153,7 @@ def train_tcn(data_loader, X, epochs=50):
 
 
 if __name__ == "__main__":
-    train_loader, val_loader, X = data_processing()
+    train_loader, val_loader, X = data_processing_h5()
     model = train_tcn(train_loader, X)
     metrics = evaluate(model, val_loader)
     print(metrics)
