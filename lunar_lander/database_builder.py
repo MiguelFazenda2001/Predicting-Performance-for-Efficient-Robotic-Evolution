@@ -8,6 +8,7 @@ import json
 import glob
 import argparse
 import h5py
+from datetime import datetime
 
 # ation space: Discrete(4)
 # 0 -> do nothing
@@ -202,8 +203,11 @@ if __name__ == "__main__":
     n_evolutions = args.evolutions
     generations = args.generations
     episodes_per_genome = args.episodes
+    datetime = str(datetime.now().strftime("%Y%m%d_%H%M%S"))
+    model_folder = os.path.join(local_dir, "models", f"{datetime}_neat")
+    os.makedirs(model_folder, exist_ok=True)
 
     for evo in range(n_evolutions):
-        model_path = os.path.join(local_dir, "models", f"evolution_{evo}.pkl")
+        model_path = os.path.join(model_folder, f"evolution_{evo}.pkl")
 
         run_neat(config_path, model_path, generations, episodes_per_genome)

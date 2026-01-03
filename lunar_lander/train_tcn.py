@@ -109,7 +109,7 @@ def log_metrics(metrics, path="results/metrics_log.jsonl"):
 
 if __name__ == "__main__":
     model_folder = str(datetime.now().strftime("%Y%m%d_%H%M%S"))
-    save_path = f"models/{model_folder}"
+    save_path = f"models/{model_folder}_tcn"
     train_loader, val_loader, X = data_processing.data_processing_h5(save_path=save_path)
     model = train_tcn(train_loader, X, val_loader, save_path=save_path)
     metrics = evaluate(model, val_loader)
