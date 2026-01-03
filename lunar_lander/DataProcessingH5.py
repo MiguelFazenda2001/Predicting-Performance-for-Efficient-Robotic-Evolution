@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from tcn import EpisodeDataset
 
 H5_PATH = "data/episodes.h5"
+SAVE_PATH = "models"
 MAX_LEN = 500
 
 
@@ -13,7 +14,7 @@ class DataProcessingH5:
     def __init__(self):
         pass
 
-    def data_processing_h5(self, h5_path=H5_PATH, max_len=MAX_LEN):
+    def data_processing_h5(self,save_path=SAVE_PATH, h5_path=H5_PATH, max_len=MAX_LEN):
         X_list = []
         y_list = []
 
@@ -63,9 +64,9 @@ class DataProcessingH5:
         std = X.std(axis=(0,1), keepdims=True) + 1e-6
         X = (X - mean) / std
 
-        os.makedirs("models", exist_ok=True)
-        np.save("models/x_mean.npy", mean)
-        np.save("models/x_std.npy", std)
+        os.makedirs(save_path, exist_ok=True)
+        np.save(f"{save_path}/x_mean.npy", mean)
+        np.save(f"{save_path}/x_std.npy", std)
 
         X_train, X_val, y_train, y_val = train_test_split(
             X, y, test_size=0.2, random_state=42, shuffle=True, stratify=y[:, 0]

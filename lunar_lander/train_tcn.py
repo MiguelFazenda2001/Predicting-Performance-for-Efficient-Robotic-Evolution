@@ -10,6 +10,8 @@ from datetime import datetime
 
 data_processing = DataProcessingH5()
 
+SAVE_PATH = "models"
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
@@ -63,7 +65,7 @@ def evaluate(model, loader, random_baseline=False):
     return metrics
     
 
-def train_tcn(data_loader, X, val_loader, epochs=50):
+def train_tcn(data_loader, X, val_loader, epochs=50, save_path=SAVE_PATH):
     model = EpisodeTCN(input_dim=X.shape[2]).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     loss_fn = nn.MSELoss()
@@ -88,7 +90,7 @@ def train_tcn(data_loader, X, val_loader, epochs=50):
         metrics = evaluate(model, val_loader)
         print(f"Epoch {epoch+1}: val_mse_success={metrics['mse_success']:.4f}, val_mse_duration={metrics['mse_duration']:.4f}")
 
-    torch.save(model.state_dict(), "models/tcn_model.pth")
+    torch.save(model.state_dict(), f"{save_path}/tcn_model.pth")
     
     return model    
 
@@ -106,8 +108,10 @@ def log_metrics(metrics, path="results/metrics_log.jsonl"):
         f.write(json.dumps(entry) + "\n")
 
 if __name__ == "__main__":
-    train_loader, val_loader, X = data_processing.data_processing_h5()
-    model = train_tcn(train_loader, X, val_loader)
+    model_folder = str(datetime.now().strftime("%Y%m%d_%H%M%S"))
+    save_path = f"models/{model_folder}"
+    train_loader, val_loader, X = data_processing.data_processing_h5(save_path=save_path)
+    model = train_tcn(train_loader, X, val_loader, save_path=save_path)
     metrics = evaluate(model, val_loader)
     print(metrics)
     log_metrics(metrics, path="results/metrics_log.jsonl")
