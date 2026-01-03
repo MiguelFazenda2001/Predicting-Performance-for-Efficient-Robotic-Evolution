@@ -1,36 +1,18 @@
 import ast
 import numpy as np
-import pandas as pd
-from tcn import EpisodeTCN, EpisodeDataset
+from tcn import EpisodeTCN
 from tqdm import tqdm
-import os
-import h5py
-
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
-
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from DataProcessingH5 import DataProcessingH5
 
-from sklearn.model_selection import train_test_split
+data_processing = DataProcessingH5()
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
-
-H5_PATH = "data/episodes.h5"
-MAX_LEN = 500
-
-def parse_array(s):
-    return np.array(ast.literal_eval(s), dtype=np.float32)
-
-def pad_or_truncate(x, max_len):
-    if len(x) >= max_len:
-        return x[:max_len]
-    pad = np.zeros((max_len - len(x), x.shape[1]), dtype=np.float32)
-    return np.vstack([x, pad])
-
-def evaluate(model, loader):
+def evaluate(model, loader, random_baseline=False):
     model.eval()
     ys, preds = [], []
 
@@ -46,7 +28,7 @@ def evaluate(model, loader):
     y_true = np.vstack(ys)
     y_pred = np.vstack(preds)
 
-    return {
+    metrics = {
         "mse_success": mean_squared_error(y_true[:,0], y_pred[:,0]),
         "mse_duration": mean_squared_error(y_true[:,1], y_pred[:,1]),
         "mae_success": mean_absolute_error(y_true[:,0], y_pred[:,0]),
@@ -55,77 +37,35 @@ def evaluate(model, loader):
         "r2_duration": r2_score(y_true[:,1], y_pred[:,1]),
     }
 
-def data_processing_h5(h5_path=H5_PATH, max_len=MAX_LEN):
-    X_list = []
-    y_list = []
+    if random_baseline:
+        n = len(y_true)
 
-    with h5py.File(h5_path, "r") as h5:
-        for evo in h5.values():
-            for gen in evo.values():
-                for genome in gen.values():
-                    if "success_rate" not in genome.attrs:
-                        continue
+        # RANDOM SUCCESS RATE (DISCRETE)
+        success_values = np.arange(0.0, 1.01, 0.1)
+        rand_success = np.random.choice(success_values, size=n)
 
-                    y = np.array(
-                        [genome.attrs["success_rate"],
-                         genome.attrs["avg_duration"]],
-                        dtype=np.float32
-                    )
+        # RANDOM DURATION (MATCH SCALE)
+        dur_min, dur_max = y_true[:,1].min(), y_true[:,1].max()
+        rand_duration = np.random.uniform(dur_min, dur_max, size=n)
 
-                    for ep in genome.values():
-                        obs = ep["observations"][:]
-                        acts = ep["actions"][:]
+        y_rand = np.stack([rand_success, rand_duration], axis=1)
 
-                        seq = np.concatenate([obs, acts], axis=1)
+        metrics.update({
+            "rand_mse_success": mean_squared_error(y_true[:,0], y_rand[:,0]),
+            "rand_mse_duration": mean_squared_error(y_true[:,1], y_rand[:,1]),
+            "rand_mae_success": mean_absolute_error(y_true[:,0], y_rand[:,0]),
+            "rand_mae_duration": mean_absolute_error(y_true[:,1], y_rand[:,1]),
+            "rand_r2_success": r2_score(y_true[:,0], y_rand[:,0]),
+            "rand_r2_duration": r2_score(y_true[:,1], y_rand[:,1]),
+        })
 
-                        # pad / truncate
-                        if len(seq) >= max_len:
-                            seq = seq[:max_len]
-                        else:
-                            pad = np.zeros((max_len - len(seq), seq.shape[1]), dtype=np.float32)
-                            seq = np.vstack([seq, pad])
+    return metrics
+    
 
-                        X_list.append(seq)
-                        y_list.append(y)
-
-    X = np.asarray(X_list, dtype=np.float32)
-    y = np.asarray(y_list, dtype=np.float32)
-
-    # Normalize
-    mean = X.mean(axis=(0,1), keepdims=True)
-    std = X.std(axis=(0,1), keepdims=True) + 1e-6
-    X = (X - mean) / std
-
-    os.makedirs("models", exist_ok=True)
-    np.save("models/x_mean.npy", mean)
-    np.save("models/x_std.npy", std)
-
-    X_train, X_val, y_train, y_val = train_test_split(
-        X, y, test_size=0.2, random_state=42, shuffle=True
-    )
-
-    train_loader = DataLoader(
-        EpisodeDataset(X_train, y_train),
-        batch_size=128,
-        shuffle=True,
-        pin_memory=True
-    )
-
-    val_loader = DataLoader(
-        EpisodeDataset(X_val, y_val),
-        batch_size=128,
-        shuffle=False,
-        pin_memory=True
-    )
-
-    return train_loader, val_loader, X
-
-def train_tcn(data_loader, X, epochs=50):
+def train_tcn(data_loader, X, val_loader, epochs=50):
     model = EpisodeTCN(input_dim=X.shape[2]).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     loss_fn = nn.MSELoss()
-
-    
 
     for epoch in range(epochs):
         model.train()
@@ -153,8 +93,8 @@ def train_tcn(data_loader, X, epochs=50):
 
 
 if __name__ == "__main__":
-    train_loader, val_loader, X = data_processing_h5()
-    model = train_tcn(train_loader, X)
+    train_loader, val_loader, X = data_processing.data_processing_h5()
+    model = train_tcn(train_loader, X, val_loader)
     metrics = evaluate(model, val_loader)
     print(metrics)
 
