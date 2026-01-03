@@ -37,7 +37,6 @@ import h5py
 # +10 for leg contact
 # + 200 for solved
 STEP_LIMIT = 500
-#DATA_CSV = "data/dataset.csv"
 H5_PATH = "data/episodes.h5"
 
 current_generation = 0
@@ -200,13 +199,6 @@ if __name__ == "__main__":
     local_dir = os.path.dirname(__file__)
     config_path = os.path.join(local_dir, "config-feedforward.txt")
     
-    """
-    if not os.path.exists(DATA_CSV):
-        pd.DataFrame(columns=[
-            "evolution", "generation", "genome_id", "episode_id", "num_steps",
-            "avg_duration", "success_rate", "observations", "actions"
-        ]).to_csv(DATA_CSV, index=False)
-    """
     n_evolutions = args.evolutions
     generations = args.generations
     episodes_per_genome = args.episodes
