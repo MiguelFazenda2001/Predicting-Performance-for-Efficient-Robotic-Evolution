@@ -1,85 +1,109 @@
-import ast
-import random
 import numpy as np
-import pandas as pd
+import h5py
 import torch
 
 from tcn import EpisodeTCN, EpisodeDataset
 from torch.utils.data import DataLoader
 
 # ---------------- CONFIG ----------------
-DATA_CSV = "data/dataset.csv"
+H5_PATH = "data/episodes.h5"
 MODEL_PATH = "models/tcn_model.pth"
 MEAN_PATH = "models/x_mean.npy"
 STD_PATH = "models/x_std.npy"
+
 MAX_LEN = 500
-NUM_SAMPLES = 10
+SAMPLES_PER_SUCCESS = 5
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("Using device:", device)
 
 
 # ---------------- HELPERS ----------------
-def parse_array(s):
-    return np.array(ast.literal_eval(s), dtype=np.float32)
-
-
-def pad_or_truncate(x, max_len):
-    out = np.zeros((max_len, x.shape[1]), dtype=np.float32)
-    length = min(len(x), max_len)
-    out[:length] = x[:length]
+def pad_or_truncate(seq, max_len):
+    out = np.zeros((max_len, seq.shape[1]), dtype=np.float32)
+    length = min(len(seq), max_len)
+    out[:length] = seq[:length]
     return out
 
-def data_processing():
-    df = pd.read_csv(DATA_CSV)
-    sampled_df = df.sample(n=NUM_SAMPLES, random_state=None)
 
+# ---------------- DATA PROCESSING (H5) ----------------
+def data_processing_h5():
+    X_list = []
+    y_list = []
 
-    obs = sampled_df["observations"].apply(parse_array).to_numpy()
-    acts = sampled_df["actions"].apply(parse_array).to_numpy()
+    # collect episodes grouped by success_rate
+    success_to_samples = {}
 
-    # Determine feature dimension once
-    feat_dim = obs[0].shape[1] + acts[0].shape[1]
+    with h5py.File(H5_PATH, "r") as h5:
+        for evo in h5.values():
+            for gen in evo.values():
+                for genome in gen.values():
 
-    # Allocate padded batch
-    X = np.zeros((len(sampled_df), MAX_LEN, feat_dim), dtype=np.float32)
+                    if "success_rate" not in genome.attrs:
+                        continue
 
-    for i, (o, a) in enumerate(zip(obs, acts)):
-        seq = np.concatenate([o, a], axis=1)
-        length = min(len(seq), MAX_LEN)
-        X[i, :length] = seq[:length]
+                    success_rate = float(genome.attrs["success_rate"])
+                    avg_duration = float(genome.attrs["avg_duration"])
+                    y = np.array([success_rate, avg_duration], dtype=np.float32)
 
-    y = sampled_df[["success_rate", "avg_duration"]].to_numpy(dtype=np.float32)
+                    for ep in genome.values():
+                        obs = ep["observations"][:]
+                        acts = ep["actions"][:]
 
-    # Normalize inputs
+                        seq = np.concatenate([obs, acts], axis=1)
+                        seq = pad_or_truncate(seq, MAX_LEN)
+
+                        success_to_samples.setdefault(success_rate, []).append(
+                            (seq, y)
+                        )
+
+    # ---- SAMPLE EXACTLY 5 PER SUCCESS RATE ----
+    for rate in sorted(success_to_samples.keys()):
+        samples = success_to_samples[rate]
+
+        if len(samples) < SAMPLES_PER_SUCCESS:
+            raise ValueError(
+                f"Not enough episodes for success_rate={rate}: "
+                f"needed {SAMPLES_PER_SUCCESS}, found {len(samples)}"
+            )
+
+        chosen = np.random.choice(
+            len(samples), SAMPLES_PER_SUCCESS, replace=False
+        )
+
+        for idx in chosen:
+            X_list.append(samples[idx][0])
+            y_list.append(samples[idx][1])
+
+    X = np.asarray(X_list, dtype=np.float32)
+    y = np.asarray(y_list, dtype=np.float32)
+
+    # ---- NORMALIZE ----
     mean = np.load(MEAN_PATH)
     std = np.load(STD_PATH)
-
     X = (X - mean) / std
 
-    data_loader = DataLoader(EpisodeDataset(X, y), batch_size=128, shuffle=True, pin_memory=True)
+    data_loader = DataLoader(
+        EpisodeDataset(X, y),
+        batch_size=128,
+        shuffle=False,   # keep order for inspection
+        pin_memory=True
+    )
 
-    return data_loader, X
+    return data_loader, X, y
 
-# ---------------- LOAD NORMALIZATION ----------------
-mean = np.load(MEAN_PATH)
-std = np.load(STD_PATH)
+
+# ---------------- LOAD DATA ----------------
+data_loader, X, y_true = data_processing_h5()
 
 
 # ---------------- LOAD MODEL ----------------
-# infer input_dim from normalization stats
-
-
-data_loader, X = data_processing()
-
 model = EpisodeTCN(input_dim=X.shape[2]).to(device)
 model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
 model.eval()
 
 
-# ---------------- LOAD & SAMPLE DATA ----------------
-
-print("\n=== TCN Episode Predictions ===\n")
-
+# ---------------- INFERENCE ----------------
 ys, preds = [], []
 
 with torch.no_grad():
@@ -94,8 +118,23 @@ with torch.no_grad():
 y_true = np.vstack(ys)
 y_pred = np.vstack(preds)
 
+
+# ---------------- OUTPUT ----------------
 np.set_printoptions(precision=3, suppress=True)
 
+print("\n=== TCN Predictions (H5 | 5 per success rate) ===\n")
+print("Ground truth:")
 print(y_true)
-print("\n--- Predictions ---\n")
+
+print("\nPredictions:")
 print(y_pred)
+
+
+# ---------------- PER-SUCCESS-RATE VIEW ----------------
+for rate in np.unique(y_true[:, 0]):
+    idxs = np.where(y_true[:, 0] == rate)[0]
+    print(f"\nSuccess rate {rate}:")
+    for i in idxs:
+        print(
+            f"  true={y_true[i]}  pred={y_pred[i]}"
+        )

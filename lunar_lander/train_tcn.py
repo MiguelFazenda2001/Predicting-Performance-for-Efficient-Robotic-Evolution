@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from DataProcessingH5 import DataProcessingH5
+import json
+from datetime import datetime
 
 data_processing = DataProcessingH5()
 
@@ -91,9 +93,22 @@ def train_tcn(data_loader, X, val_loader, epochs=50):
     return model    
 
 
+def log_metrics(metrics, path="results/metrics_log.jsonl"):
+    """
+    Append metrics to a JSONL file (one JSON object per line).
+    """
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        **metrics
+    }
+
+    with open(path, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+
 if __name__ == "__main__":
     train_loader, val_loader, X = data_processing.data_processing_h5()
     model = train_tcn(train_loader, X, val_loader)
     metrics = evaluate(model, val_loader)
     print(metrics)
+    log_metrics(metrics, path="results/metrics_log.jsonl")
 
