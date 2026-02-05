@@ -25,7 +25,7 @@ def evaluate(model, loader, random_baseline=False):
             yb = yb.to(device, non_blocking=True)
             mb = mb.to(device, non_blocking=True)
 
-            p = model(xb)
+            p = model(xb, mb)
             preds.append(p.cpu().numpy())
             ys.append(yb.cpu().numpy())
 
@@ -99,7 +99,7 @@ def train_episodetcn(data_loader, input_dim, val_loader, epochs=50, save_path=SA
         losses.append(loss.item())
         mse_success.append(metrics['mse_success'])
         mse_duration.append(metrics['mse_duration'])
-    torch.save(model.state_dict(), f"{save_path}/tcn_model.pth")
+    torch.save(model.state_dict(), f"{save_path}/episode_tcn_model.pth")
     
     return model, losses, mse_success, mse_duration
 
@@ -122,7 +122,7 @@ def train_residualtcn(data_loader, input_dim, val_loader, epochs=50, save_path=S
             mb = mb.to(device, non_blocking=True)
 
             optimizer.zero_grad()
-            pred = model(xb)
+            pred = model(xb, mb)
             loss = loss_fn(pred, yb)
             loss.backward()
             optimizer.step()
@@ -136,7 +136,7 @@ def train_residualtcn(data_loader, input_dim, val_loader, epochs=50, save_path=S
         losses.append(loss.item())
         mse_success.append(metrics['mse_success'])
         mse_duration.append(metrics['mse_duration'])
-    torch.save(model.state_dict(), f"{save_path}/tcn_model.pth")
+    torch.save(model.state_dict(), f"{save_path}/residual_tcn_model.pth")
     
     return model, losses, mse_success, mse_duration
 
@@ -153,7 +153,7 @@ def log_metrics(metrics, path="results/metrics_log.jsonl"):
     with open(path, "a") as f:
         f.write(json.dumps(entry) + "\n")
 
-def plot_training_curves(losses, mse_success, mse_duration, save_path=SAVE_PATH):
+def plot_training_curves(losses, mse_success, mse_duration, save_path=SAVE_PATH, model_name=None):
     import matplotlib.pyplot as plt
 
     epochs = range(1, len(losses) + 1)
@@ -182,21 +182,21 @@ def plot_training_curves(losses, mse_success, mse_duration, save_path=SAVE_PATH)
     plt.grid()
 
     plt.tight_layout()
-    plt.savefig(f"{save_path}/training_curves.png")
+    plt.savefig(f"{save_path}/{model_name}_training_curves.png")
     plt.close()
 
 if __name__ == "__main__":
     model_folder = str(datetime.now().strftime("%Y%m%d_%H%M%S"))
-    save_path = f"models/{model_folder}_episodetcn"
+    save_path = f"models/{model_folder}_tcn"
     train_loader, val_loader, input_dim = data_processing.data_processing_h5(save_path=save_path)
     episode_model, losses, mse_success, mse_duration = train_episodetcn(train_loader, input_dim, val_loader, save_path=save_path)
-    plot_training_curves(losses, mse_success, mse_duration, save_path=save_path)
+    plot_training_curves(losses, mse_success, mse_duration, save_path=save_path, model_name="episodetcn")
     metrics = evaluate(episode_model, val_loader)
     print(metrics)
 
     save_path = f"models/{model_folder}_residualtcn"
     episode_model, losses, mse_success, mse_duration = train_residualtcn(train_loader, input_dim, val_loader, save_path=save_path)
-    plot_training_curves(losses, mse_success, mse_duration, save_path=save_path)
+    plot_training_curves(losses, mse_success, mse_duration, save_path=save_path, model_name="residualtcn")
     metrics = evaluate(episode_model, val_loader)
     print(metrics)
     #log_metrics(metrics, path="results/metrics_log.jsonl")

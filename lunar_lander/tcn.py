@@ -28,22 +28,22 @@ class EpisodeTCN(nn.Module):
         self.pool = nn.AdaptiveAvgPool1d(1)
         self.fc = nn.Linear(128, 2)
 
-    def forward(self, x):
+    def forward(self, x, M=None):
         x = x.transpose(1, 2)  # (B, F, T)
         x = self.tcn(x)
         x = self.pool(x).squeeze(-1)
         return self.fc(x)
 
 class ResidualTCNBlock(nn.Module):
-    def __init__(self, in_ch, out_ch, kernel=3,dilation=1, dropout=0.2):
+    def __init__(self, in_ch, out_ch, dilation=1, kernel=3, dropout=0.2):
         super().__init__()
 
         padding = (kernel - 1) * dilation
-        self.conv1 == nn.Conv1d(in_ch, out_ch, kernel,
+        self.conv1 = nn.Conv1d(in_ch, out_ch, kernel,
                                 padding=padding,
                                 dilation=dilation)
         
-        self.conv2 == nn.Conv1d(in_ch, out_ch, kernel,
+        self.conv2 = nn.Conv1d(out_ch, out_ch, kernel,
                                 padding=padding,
                                 dilation=dilation)
         self.norm1 = nn.BatchNorm1d(out_ch)
@@ -81,7 +81,7 @@ class ResidualEpisodeTCN(nn.Module):
             ResidualTCNBlock(64, 128, dilation=4),
         )
         
-        self.pool = nn.AdaptiveAvgPool1d(1)
+        #self.pool = nn.AdaptiveAvgPool1d(1)
         
         self.success_head = nn.Sequential(nn.Linear(128, 64),
                                         nn.ReLU(),
@@ -92,7 +92,7 @@ class ResidualEpisodeTCN(nn.Module):
                                         nn.ReLU(),
                                         nn.Linear(64, 1))
 
-    def masked_mean(x, mask):
+    def masked_mean(self, x, mask):
         mask = mask.unsqueeze(1)  # (B, 1, T)
         x = x * mask  # zero out masked positions
         sum_x = x.sum(dim=2)  # sum over time
