@@ -194,7 +194,7 @@ if __name__ == "__main__":
     metrics = evaluate(episode_model, val_loader)
     print(metrics)
 
-    save_path = f"models/{model_folder}_residualtcn"
+    save_path = f"models/{model_folder}_tcn"
     episode_model, losses, mse_success, mse_duration = train_residualtcn(train_loader, input_dim, val_loader, save_path=save_path)
     plot_training_curves(losses, mse_success, mse_duration, save_path=save_path, model_name="residualtcn")
     metrics = evaluate(episode_model, val_loader)
