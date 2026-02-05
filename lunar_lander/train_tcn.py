@@ -8,7 +8,7 @@ from DataProcessingH5 import DataProcessingH5
 import json
 from datetime import datetime
 
-data_processing = DataProcessingH5()
+data_processing = DataProcessingH5() #Padding needs mask so tcn doesnt avgPool with zeros
 
 SAVE_PATH = "models"
 
@@ -20,9 +20,10 @@ def evaluate(model, loader, random_baseline=False):
     ys, preds = [], []
 
     with torch.no_grad():
-        for xb, yb in loader:
+        for xb, yb, mb in loader:
             xb = xb.to(device, non_blocking=True)
             yb = yb.to(device, non_blocking=True)
+            mb = mb.to(device, non_blocking=True)
 
             p = model(xb)
             preds.append(p.cpu().numpy())
@@ -70,13 +71,18 @@ def train_tcn(data_loader, X, val_loader, epochs=50, save_path=SAVE_PATH):
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     loss_fn = nn.MSELoss()
 
+    losses = []
+    mse_success = []
+    mse_duration = []
+
     for epoch in range(epochs):
         model.train()
         loop = tqdm(data_loader, desc=f"Epoch {epoch+1}/{epochs}")
 
-        for xb, yb in loop:
+        for xb, yb, mb in loop:
             xb = xb.to(device, non_blocking=True)
             yb = yb.to(device, non_blocking=True)
+            mb = mb.to(device, non_blocking=True)
 
             optimizer.zero_grad()
             pred = model(xb)
@@ -90,9 +96,12 @@ def train_tcn(data_loader, X, val_loader, epochs=50, save_path=SAVE_PATH):
         metrics = evaluate(model, val_loader)
         print(f"Epoch {epoch+1}: val_mse_success={metrics['mse_success']:.4f}, val_mse_duration={metrics['mse_duration']:.4f}")
 
+        losses.append(loss.item())
+        mse_success.append(metrics['mse_success'])
+        mse_duration.append(metrics['mse_duration'])
     torch.save(model.state_dict(), f"{save_path}/tcn_model.pth")
     
-    return model    
+    return model, losses, mse_success, mse_duration
 
 
 def log_metrics(metrics, path="results/metrics_log.jsonl"):
@@ -107,11 +116,44 @@ def log_metrics(metrics, path="results/metrics_log.jsonl"):
     with open(path, "a") as f:
         f.write(json.dumps(entry) + "\n")
 
+def plot_training_curves(losses, mse_success, mse_duration, save_path=SAVE_PATH):
+    import matplotlib.pyplot as plt
+
+    epochs = range(1, len(losses) + 1)
+
+    plt.figure(figsize=(12, 4))
+
+    plt.subplot(1, 3, 1)
+    plt.plot(epochs, losses, label="Training Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Training Loss Curve")
+    plt.grid()
+    
+    plt.subplot(1, 3, 2)
+    plt.plot(epochs, mse_success, label="Validation MSE Success", color='orange')
+    plt.xlabel("Epoch")
+    plt.ylabel("MSE Success")
+    plt.title("Validation MSE Success Curve")
+    plt.grid()
+
+    plt.subplot(1, 3, 3)
+    plt.plot(epochs, mse_duration, label="Validation MSE Duration", color='green')
+    plt.xlabel("Epoch")
+    plt.ylabel("MSE Duration")
+    plt.title("Validation MSE Duration Curve")
+    plt.grid()
+
+    plt.tight_layout()
+    plt.savefig(f"{save_path}/training_curves.png")
+    plt.close()
+
 if __name__ == "__main__":
     model_folder = str(datetime.now().strftime("%Y%m%d_%H%M%S"))
     save_path = f"models/{model_folder}_tcn"
     train_loader, val_loader, X = data_processing.data_processing_h5(save_path=save_path)
-    model = train_tcn(train_loader, X, val_loader, save_path=save_path)
+    model, losses, mse_success, mse_duration = train_tcn(train_loader, X, val_loader, save_path=save_path)
+    plot_training_curves(losses, mse_success, mse_duration, save_path=save_path)
     metrics = evaluate(model, val_loader)
     print(metrics)
     log_metrics(metrics, path="results/metrics_log.jsonl")
