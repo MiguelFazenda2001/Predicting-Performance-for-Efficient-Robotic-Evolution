@@ -1,5 +1,5 @@
 import numpy as np
-from tcn import EpisodeTCN
+from tcn import EpisodeTCN, ResidualEpisodeTCN
 from tqdm import tqdm
 import torch
 import torch.nn as nn
@@ -66,8 +66,45 @@ def evaluate(model, loader, random_baseline=False):
     return metrics
     
 
-def train_tcn(data_loader, X, val_loader, epochs=50, save_path=SAVE_PATH):
-    model = EpisodeTCN(input_dim=X.shape[2]).to(device)
+def train_episodetcn(data_loader, input_dim, val_loader, epochs=50, save_path=SAVE_PATH):
+    model = EpisodeTCN(input_dim=input_dim).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    loss_fn = nn.MSELoss()
+
+    losses = []
+    mse_success = []
+    mse_duration = []
+
+    for epoch in range(epochs):
+        model.train()
+        loop = tqdm(data_loader, desc=f"Epoch {epoch+1}/{epochs}")
+
+        for xb, yb, mb in loop:
+            xb = xb.to(device, non_blocking=True)
+            yb = yb.to(device, non_blocking=True)
+            mb = mb.to(device, non_blocking=True)
+
+            optimizer.zero_grad()
+            pred = model(xb)
+            loss = loss_fn(pred, yb)
+            loss.backward()
+            optimizer.step()
+
+            # Update progress bar with current loss
+            loop.set_postfix(loss=loss.item())
+
+        metrics = evaluate(model, val_loader)
+        print(f"Epoch {epoch+1}: val_mse_success={metrics['mse_success']:.4f}, val_mse_duration={metrics['mse_duration']:.4f}")
+
+        losses.append(loss.item())
+        mse_success.append(metrics['mse_success'])
+        mse_duration.append(metrics['mse_duration'])
+    torch.save(model.state_dict(), f"{save_path}/tcn_model.pth")
+    
+    return model, losses, mse_success, mse_duration
+
+def train_residualtcn(data_loader, input_dim, val_loader, epochs=50, save_path=SAVE_PATH):
+    model = ResidualEpisodeTCN(input_dim=input_dim).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     loss_fn = nn.MSELoss()
 
@@ -150,11 +187,17 @@ def plot_training_curves(losses, mse_success, mse_duration, save_path=SAVE_PATH)
 
 if __name__ == "__main__":
     model_folder = str(datetime.now().strftime("%Y%m%d_%H%M%S"))
-    save_path = f"models/{model_folder}_tcn"
-    train_loader, val_loader, X = data_processing.data_processing_h5(save_path=save_path)
-    model, losses, mse_success, mse_duration = train_tcn(train_loader, X, val_loader, save_path=save_path)
+    save_path = f"models/{model_folder}_episodetcn"
+    train_loader, val_loader, input_dim = data_processing.data_processing_h5(save_path=save_path)
+    episode_model, losses, mse_success, mse_duration = train_episodetcn(train_loader, input_dim, val_loader, save_path=save_path)
     plot_training_curves(losses, mse_success, mse_duration, save_path=save_path)
-    metrics = evaluate(model, val_loader)
+    metrics = evaluate(episode_model, val_loader)
     print(metrics)
-    log_metrics(metrics, path="results/metrics_log.jsonl")
+
+    save_path = f"models/{model_folder}_residualtcn"
+    episode_model, losses, mse_success, mse_duration = train_residualtcn(train_loader, input_dim, val_loader, save_path=save_path)
+    plot_training_curves(losses, mse_success, mse_duration, save_path=save_path)
+    metrics = evaluate(episode_model, val_loader)
+    print(metrics)
+    #log_metrics(metrics, path="results/metrics_log.jsonl")
 

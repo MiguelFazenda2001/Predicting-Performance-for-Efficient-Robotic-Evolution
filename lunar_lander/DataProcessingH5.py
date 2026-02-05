@@ -89,7 +89,7 @@ class DataProcessingH5:
             pin_memory=True
         )
 
-        return train_loader, val_loader, X  
+        return train_loader, val_loader, X.shape[2]  
     
     @staticmethod
     def __balance_by_exact_success_rate(X, y, M, seed=42):
