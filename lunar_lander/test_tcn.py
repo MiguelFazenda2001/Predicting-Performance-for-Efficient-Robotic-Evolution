@@ -1,18 +1,21 @@
 import numpy as np
 import h5py
 import torch
+import os
+import matplotlib.pyplot as plt
 
 from tcn import EpisodeTCN, EpisodeDataset
 from torch.utils.data import DataLoader
 
 # ---------------- CONFIG ----------------
 H5_PATH = "data/episodes.h5"
-MODEL_PATH = "models/tcn_model.pth"
-MEAN_PATH = "models/x_mean.npy"
-STD_PATH = "models/x_std.npy"
+DEFAULT_PATH = "models/original_tcn"
+MODEL_PATH = f"{DEFAULT_PATH}/tcn_model.pth"
+MEAN_PATH = f"{DEFAULT_PATH}/x_mean.npy"
+STD_PATH = f"{DEFAULT_PATH}/x_std.npy"
 
 MAX_LEN = 500
-SAMPLES_PER_SUCCESS = 5
+SAMPLES_PER_SUCCESS = 10
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
@@ -30,6 +33,7 @@ def pad_or_truncate(seq, max_len):
 def data_processing_h5():
     X_list = []
     y_list = []
+    M_list = []
 
     # collect episodes grouped by success_rate
     success_to_samples = {}
@@ -51,10 +55,23 @@ def data_processing_h5():
                         acts = ep["actions"][:]
 
                         seq = np.concatenate([obs, acts], axis=1)
-                        seq = pad_or_truncate(seq, MAX_LEN)
+
+                        mask = np.ones(MAX_LEN, dtype=np.float32)
+
+                        length = len(seq)
+
+                        # pad / truncate
+                        if length >= MAX_LEN:
+                            seq = seq[:MAX_LEN]
+                            mask = mask[:MAX_LEN]
+                        else:
+                            pad = np.zeros((MAX_LEN - length, seq.shape[1]), dtype=np.float32)
+                            seq = np.vstack([seq, pad])
+                            mask[length:] = 0.0
+                            
 
                         success_to_samples.setdefault(success_rate, []).append(
-                            (seq, y)
+                            (seq, y, mask)
                         )
 
     # ---- SAMPLE EXACTLY 5 PER SUCCESS RATE ----
@@ -74,27 +91,70 @@ def data_processing_h5():
         for idx in chosen:
             X_list.append(samples[idx][0])
             y_list.append(samples[idx][1])
+            M_list.append(samples[idx][2])
 
     X = np.asarray(X_list, dtype=np.float32)
     y = np.asarray(y_list, dtype=np.float32)
+    M = np.asarray(M_list, dtype=np.float32)
 
     # ---- NORMALIZE ----
     mean = np.load(MEAN_PATH)
     std = np.load(STD_PATH)
+
+    mask_exp = M[..., None]  # (B,T,1)
+
+    count = mask_exp.sum(axis=(0,1))
+
     X = (X - mean) / std
+    X *= mask_exp 
 
     data_loader = DataLoader(
-        EpisodeDataset(X, y),
+        EpisodeDataset(X, y, M),
         batch_size=128,
         shuffle=False,   # keep order for inspection
         pin_memory=True
     )
 
-    return data_loader, X, y
+    return data_loader, X, y, M
+
+
+def save_line_comparison_png(y_true, y_pred, save_path="prediction_vs_gt.png"):
+    """
+    Saves a single PNG with two vertically stacked plots:
+    - Top: Success Rate
+    - Bottom: Average Duration
+    """
+
+    assert y_true.shape == y_pred.shape, "Shapes must match"
+
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+    x = np.arange(len(y_true))
+
+    fig, axes = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
+
+    titles = ["Success Rate", "Average Duration"]
+
+    for i in range(2):
+        axes[i].plot(x, y_true[:, i], label="Ground Truth", linewidth=2)
+        axes[i].plot(x, y_pred[:, i], linestyle="--", label="Prediction", linewidth=2)
+
+        axes[i].set_ylabel(titles[i])
+        axes[i].set_title(f"{titles[i]}: Ground Truth vs Prediction")
+        axes[i].legend()
+        axes[i].grid(True)
+
+    axes[1].set_xlabel("Sample Index")
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300)
+    plt.close(fig)
+
+    print(f"Saved stacked comparison plot to: {save_path}")
 
 
 # ---------------- LOAD DATA ----------------
-data_loader, X, y_true = data_processing_h5()
+data_loader, X, y_true, M = data_processing_h5()
 
 
 # ---------------- LOAD MODEL ----------------
@@ -107,11 +167,12 @@ model.eval()
 ys, preds = [], []
 
 with torch.no_grad():
-    for xb, yb in data_loader:
+    for xb, yb, mb in data_loader:
         xb = xb.to(device, non_blocking=True)
         yb = yb.to(device, non_blocking=True)
+        mb = mb.to(device, non_blocking=True)
 
-        p = model(xb)
+        p = model(xb, mb)
         preds.append(p.cpu().numpy())
         ys.append(yb.cpu().numpy())
 
@@ -138,3 +199,9 @@ for rate in np.unique(y_true[:, 0]):
         print(
             f"  true={y_true[i]}  pred={y_pred[i]}"
         )
+
+save_line_comparison_png(
+    y_true,
+    y_pred,
+    save_path=f"{DEFAULT_PATH}/tcn_line_comparison.png"
+)
