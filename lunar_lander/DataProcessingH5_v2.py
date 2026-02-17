@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
 from tcn import EpisodeDataset
 
-H5_PATH = "data/episodes.h5"
+H5_PATH = "data/train_episodes.h5"
 SAVE_PATH = "models"
 MAX_LEN = 500
 
@@ -91,7 +91,16 @@ class DataProcessingH5:
             pin_memory=True
         )
 
-        return train_loader, val_loader, X.shape[2]  
+        return train_loader, val_loader, X.shape[2]
+
+    def denormalize_targets(self, y_norm, save_path=SAVE_PATH):
+        mean = np.load(f"{save_path}/y_mean.npy")
+        std = np.load(f"{save_path}/y_std.npy")
+
+        y_denorm = y_norm.copy()
+        y_denorm[:,1] = y_denorm[:,1] * std + mean
+
+        return y_denorm  
     
     @staticmethod
     def __balance_by_exact_success_rate(X, y, M, seed=42):
@@ -155,13 +164,8 @@ class DataProcessingH5:
         mean = y_train[:,1].mean(axis=0)
         std = y_train[:,1].std(axis=0) + 1e-6
 
-        print(f"Target normalization - mean: {mean}, std: {std}")
-        print(y_train[:,1][:10])
-
         y_train[:,1] = (y_train[:,1] - mean) / std
         y_val[:,1] = (y_val[:,1] - mean) / std
-
-        print(y_train[:,1][:10])
 
         os.makedirs(save_path, exist_ok=True)
         np.save(f"{save_path}/y_mean.npy", mean)
