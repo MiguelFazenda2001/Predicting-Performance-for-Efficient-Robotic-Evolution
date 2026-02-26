@@ -200,46 +200,36 @@ def save_interactive_comparison(
 
     x = np.arange(len(y_true))*5
 
-    fig = make_subplots(
-        rows=2,
-        cols=1,
-        shared_xaxes=True,
-        subplot_titles=("Success Rate", "Average Duration")
+    fig = go.Figure()
+
+    # Prediction (draw first → stays underneath)
+    fig.add_trace(
+        go.Scattergl(
+            x=x,
+            y=y_pred[:, 0],
+            name="Prediction",
+            mode="lines",
+            line=dict(dash="dash", width=1),
+        )
     )
 
-    titles = ["Success Rate", "Average Duration"]
-
-    for i in range(2):
-        # Ground truth
-        fig.add_trace(
-            go.Scatter(
-                x=x,
-                y=y_true[:, i],
-                name=f"{titles[i]} GT",
-                mode="lines",
-            ),
-            row=i + 1,
-            col=1
+    # Ground truth (draw last → appears on top)
+    fig.add_trace(
+        go.Scattergl(
+            x=x,
+            y=y_true[:, 0],
+            name="Ground Truth",
+            mode="lines",
+            line=dict(width=3),
         )
+    )
 
-        # Prediction
-        fig.add_trace(
-            go.Scatter(
-                x=x,
-                y=y_pred[:, i],
-                name=f"{titles[i]} Prediction",
-                mode="lines",
-                line=dict(dash="dash"),
-            ),
-            row=i + 1,
-            col=1
-        )
-
-    # ⭐ THIS ADDS SCROLLING
     fig.update_layout(
-        height=800,
-        title="Ground Truth vs Prediction",
-        xaxis2_rangeslider_visible=True,  # scroll bar
+        title="Success Rate: Ground Truth vs Prediction",
+        xaxis_title="Sample Index",
+        yaxis_title="Success Rate",
+        height=500,
+        xaxis_rangeslider_visible=True,  # scroll bar
     )
 
     fig.write_html(save_path)
