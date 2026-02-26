@@ -198,7 +198,7 @@ def save_interactive_comparison(
 
     assert y_true.shape == y_pred.shape
 
-    x = np.arange(len(y_true))*5
+    x = np.arange(len(y_true))
 
     fig = go.Figure()
 
