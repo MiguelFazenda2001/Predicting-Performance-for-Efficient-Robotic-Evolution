@@ -269,19 +269,25 @@ with torch.no_grad():
 y_true = y_denormalize(torch.cat(ys, dim=0).numpy())
 y_pred = y_denormalize(torch.cat(preds, dim=0).numpy())
 
+order = np.argsort(y_true[:, 0])
+
+y_true = y_true[order]
+y_pred = y_pred[order]
+
 
 # ---------------- OUTPUT ----------------
 np.set_printoptions(precision=3, suppress=True)
 
 print("\n=== TCN Predictions (H5 | 5 per success rate) ===\n")
 print("Ground truth:")
-print(y_true)
+#print(y_true)
 
 print("\nPredictions:")
-print(y_pred)
+#print(y_pred)
 
 
 # ---------------- PER-SUCCESS-RATE VIEW ----------------
+"""
 for rate in np.unique(y_true[:, 0]):
     idxs = np.where(y_true[:, 0] == rate)[0]
     print(f"\nSuccess rate {rate}:")
@@ -289,7 +295,7 @@ for rate in np.unique(y_true[:, 0]):
         print(
             f"  true={y_true[i]}  pred={y_pred[i]}"
         )
-
+"""
 if SAMPLES_PER_SUCCESS != 0:
     save_line_comparison_png(
         y_true,
