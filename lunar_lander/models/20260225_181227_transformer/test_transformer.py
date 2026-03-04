@@ -18,7 +18,7 @@ Y_MEAN_PATH = "y_mean.npy"
 Y_STD_PATH = "y_std.npy"
 
 MAX_LEN = 500
-SAMPLES_PER_SUCCESS = 0
+SAMPLES_PER_SUCCESS = 1000
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
@@ -266,10 +266,10 @@ np.set_printoptions(precision=3, suppress=True)
 
 print("\n=== TCN Predictions (H5 | 5 per success rate) ===\n")
 print("Ground truth:")
-print(y_true)
+#print(y_true)
 
 print("\nPredictions:")
-print(y_pred)
+#print(y_pred)
 
 
 # ---------------- PER-SUCCESS-RATE VIEW ----------------
@@ -281,7 +281,7 @@ for rate in np.unique(y_true[:, 0]):
             f"  true={y_true[i]}  pred={y_pred[i]}"
         )
 
-if SAMPLES_PER_SUCCESS != 0:
+if SAMPLES_PER_SUCCESS != 0 and SAMPLES_PER_SUCCESS < 20:
     save_line_comparison_png(
         y_true,
         y_pred,
@@ -291,5 +291,5 @@ else:
     save_interactive_comparison(
         y_true,
         y_pred,
-        save_path="transformer_interactive_comparison.html"
+        save_path=f"{SAMPLES_PER_SUCCESS}_transformer_interactive_comparison.html"
     )

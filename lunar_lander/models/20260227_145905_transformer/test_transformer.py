@@ -20,7 +20,7 @@ Y_STD_PATH = "y_std.npy"
 INPUT_DIM = "input_dim.json"
 
 MAX_LEN = 500
-SAMPLES_PER_SUCCESS = 0
+SAMPLES_PER_SUCCESS = 10
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
@@ -296,7 +296,7 @@ for rate in np.unique(y_true[:, 0]):
             f"  true={y_true[i]}  pred={y_pred[i]}"
         )
 """
-if SAMPLES_PER_SUCCESS != 0:
+if SAMPLES_PER_SUCCESS != 0 and SAMPLES_PER_SUCCESS < 20:
     save_line_comparison_png(
         y_true,
         y_pred,
@@ -306,5 +306,5 @@ else:
     save_interactive_comparison(
         y_true,
         y_pred,
-        save_path="transformer_interactive_comparison.html"
+        save_path=f"{SAMPLES_PER_SUCCESS}_transformer_interactive_comparison.html"
     )
