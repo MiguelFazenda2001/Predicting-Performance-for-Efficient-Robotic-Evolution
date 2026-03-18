@@ -18,7 +18,7 @@ Y_MEAN_PATH = "y_mean.npy"
 Y_STD_PATH = "y_std.npy"
 
 MAX_LEN = 500
-SAMPLES_PER_SUCCESS = 100
+SAMPLES_PER_SUCCESS = 10
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
