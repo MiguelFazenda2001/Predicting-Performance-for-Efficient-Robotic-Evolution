@@ -1,8 +1,0 @@
-=== TCN Evaluation Metrics ===
-mse_success: 0.0271
-mse_duration: 0.2354
-mae_success: 0.1215
-mae_duration: 0.3656
-r2_success: 0.7141
-r2_duration: 0.8816
-100000 samples evaluated.
