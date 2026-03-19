@@ -1,0 +1,21 @@
+MSE per success rate:
+Success 0.000 -> MSE: 0.002331
+Success 0.100 -> MSE: 0.010234
+Success 0.200 -> MSE: 0.012311
+Success 0.300 -> MSE: 0.014468
+Success 0.400 -> MSE: 0.015006
+Success 0.500 -> MSE: 0.015418
+Success 0.600 -> MSE: 0.013760
+Success 0.700 -> MSE: 0.012569
+Success 0.800 -> MSE: 0.010335
+Success 0.900 -> MSE: 0.006297
+Success 1.000 -> MSE: 0.002415
+
+Final Evaluation Metrics:
+val_loss: 0.018484
+mse_success: 0.010468
+mse_duration: 0.080295
+mae_success: 0.074632
+mae_duration: 0.205388
+r2_success: 0.895323
+r2_duration: 0.920057

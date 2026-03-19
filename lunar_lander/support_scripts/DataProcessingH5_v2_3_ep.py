@@ -18,6 +18,7 @@ class DataProcessingH5:
 
     def data_processing_h5(self,save_path=SAVE_PATH, h5_path=H5_PATH, max_len=MAX_LEN):
         rate_to_locations = {}
+        rng = np.random.default_rng(42)
 
         with h5py.File(h5_path, "r") as h5:
             for evo in h5.values():
@@ -34,7 +35,9 @@ class DataProcessingH5:
 
                         ep_indices = list(range(len(episodes)))
 
-                        triplets = list(combinations(ep_indices, 3))[:MAX_COMBOS]  # all 3-episode combos
+                        all_triplets = list(combinations(ep_indices, 3))
+                        rng.shuffle(all_triplets)
+                        triplets = all_triplets[:MAX_COMBOS]
 
                         for triplet in triplets:
                             rate_to_locations.setdefault(success, []).append(
@@ -42,8 +45,6 @@ class DataProcessingH5:
                             )
 
         min_count = min(len(v) for v in rate_to_locations.values())
-
-        rng = np.random.default_rng(42)
 
         selected = {}
         for rate, locs in rate_to_locations.items():
