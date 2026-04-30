@@ -18,6 +18,10 @@ H5_PATH = "/mnt/DATA/miguelfazenda/pickplace/dataset/raw/test_episodes.h5"
 
 current_generation = 0
 evo = 0
+env = gym.make('FetchReachDense-v4', max_episode_steps=STEP_LIMIT)
+
+min_vals = None
+range_vals = None
 
 
 class GenerationTracker(neat.reporting.BaseReporter):
@@ -27,7 +31,7 @@ class GenerationTracker(neat.reporting.BaseReporter):
 
 # --- Evaluate one genome ---
 def eval_genome(genome, config, n_episodes):
-    env = gym.make('FetchReachDense-v4', max_episode_steps=STEP_LIMIT)
+    #env = gym.make('FetchReachDense-v4', max_episode_steps=STEP_LIMIT)
 
     net = neat.nn.FeedForwardNetwork.create(genome, config)
 
@@ -49,6 +53,7 @@ def eval_genome(genome, config, n_episodes):
             "actions": [],
             "reward": 0,
             "duration": 0,
+            "total_rewards": 0,
         }
         dict_obs, _ = env.reset()
         observations, actions = [], []
@@ -56,33 +61,23 @@ def eval_genome(genome, config, n_episodes):
 
         for step in range(STEP_LIMIT):
             obs = np.concatenate([dict_obs["observation"],dict_obs["desired_goal"], dict_obs["achieved_goal"]])
+            obs = normalize_observation(obs, range_vals, min_vals)
 
-            observations.append(obs)
+            #observations.append(obs)
             action = np.clip(net.activate(obs), -1.0, 1.0)
-            actions.append(action)
+            #actions.append(action)
 
             dict_obs, reward, terminated, truncated, info = env.step(action)
 
-            achieved = dict_obs["achieved_goal"]
-            desired = dict_obs["desired_goal"]
-
-            distance = np.linalg.norm(achieved - desired)
-
-            if step == 0:
-                prev_distance = distance
-
-            progress = prev_distance - distance
-            prev_distance = distance
-
-            total_reward += reward + 2.0 * progress
+            total_reward += reward 
 
             if terminated or truncated:
                 break
 
         if reward >= -0.05:
-            total_reward += 5000.0
             success = 1
             success_count += 1
+            total_reward += 100
             print(f"Genome {genome.key} Success in episode {episode_id} with reward {reward:.2f} and total_reward {total_reward:.2f}")
         else:
             success = 0
@@ -93,18 +88,19 @@ def eval_genome(genome, config, n_episodes):
         durations.append(duration)
         total_rewards.append(total_reward)
 
-        episode_data["observations"] = observations
-        episode_data["actions"] = actions
-        episode_data["reward"] = reward
-        episode_data["success"] = success
-        episode_data["duration"] = duration
-        genome_data["episodes_data"].append(episode_data)
+        #episode_data["observations"] = observations
+        #episode_data["actions"] = actions
+        #episode_data["reward"] = reward
+        #episode_data["success"] = success
+        #episode_data["duration"] = duration
+        #genome_data["episodes_data"].append(episode_data)
 
     genome_data["success_rate"] = success_count / n_episodes
     genome_data["avg_duration"] = float(np.mean(durations))
+    genome_data["final_rewards"] = float(np.mean(final_rewards))
 
     env.close()
-    return np.mean(total_rewards), genome_data #np.mean(total_rewards)
+    return np.mean(total_rewards) * 10, genome_data #np.mean(total_rewards)
 
 # --- Evaluate an entire population ---
 def eval_population(genomes, config, n_episodes):
@@ -121,7 +117,8 @@ def eval_population(genomes, config, n_episodes):
         genome_map[genome_id].fitness = reward
         population_data.append(genome_data)
     
-    save_population_data_to_h5(population_data)
+    #save_population_data_to_h5(population_data)
+    save_population_data_to_json(population_data)
 
 def eval_worker(args):
     genome, config, n_episodes = args
@@ -155,22 +152,68 @@ def run_neat(config_file, model_path="models/temp.pkl", generations=100, n_episo
 
     print(f"Best genome saved to {model_path}")
 
-    # Test the best network visually
-    """
-    env = gym.make("LunarLander-v3",continuous=True,enable_wind=True,wind_power=15.0,turbulence_power=1.5, render_mode="human")
-    observation, _ = env.reset()
-    net = neat.nn.FeedForwardNetwork.create(winner, config)
-    total_reward = 0
-    for _ in range(500):
-        action = np.clip(net.activate(observation), -1.0, 1.0)
-        observation, reward, terminated, truncated, _ = env.step(action)
-        total_reward += reward
-        if terminated or truncated:
-            break
-    print("Final test reward:", total_reward)
+def save_population_data_to_json(population_data):
+    data = {}
 
-    env.close()
-    """
+    gen_key = f"gen_{current_generation}"
+
+    if gen_key not in data:
+        data[gen_key] = {}
+
+    # Store genome data
+    for genome_data in population_data:
+        genome_id = str(genome_data["genome_id"])  # keep keys as strings for JSON
+
+        data[gen_key][genome_id] = {
+            "success_rate": genome_data["success_rate"],
+            "avg_duration": genome_data["avg_duration"],
+            "final_rewards": genome_data["final_rewards"]
+        }
+
+    # Save back to file
+    with open("dataset.json", "a") as f:
+        f.write(json.dumps(data) + "\n")
+
+def load_limits(path="observation_limits.json"):
+    with open(path, "r") as f:
+        data = json.load(f)
+
+    min_vals = np.array(data["min"])
+    max_vals = np.array(data["max"])
+
+    range_vals = max_vals - min_vals
+    range_vals[range_vals == 0] = 1e-8
+
+    return range_vals, min_vals
+
+def normalize_observation(obs, range_vals, min_vals):
+    # scale to [0,1]
+    norm = (obs - min_vals) / range_vals
+
+    # scale to [-1,1]
+    norm = norm * 2.0 - 1.0
+
+    return norm
+
+def save_population_data_to_h5(population_data):
+    with h5py.File(H5_PATH, "a") as h5file:
+        for genome_data in population_data:
+            group_name = f"evo_{evo}/gen_{current_generation}/genome_{genome_data['genome_id']}"
+            if group_name in h5file:
+                del h5file[group_name]  # Remove existing group to avoid duplication
+            group = h5file.create_group(group_name)
+            group.attrs["success_rate"] = genome_data["success_rate"]
+            group.attrs["avg_duration"] = genome_data["avg_duration"]
+
+            for episode_id, episode_data in enumerate(genome_data["episodes_data"]):
+                episode_group = group.create_group(f"episode_{episode_id}")
+                episode_group.create_dataset("observations", data=np.array(episode_data["observations"]),compression="gzip",
+                compression_opts=4)
+                episode_group.create_dataset("actions", data=np.array(episode_data["actions"]),compression="gzip",
+                compression_opts=4)
+                episode_group.attrs["reward"] = episode_data["reward"]
+                episode_group.attrs["success"] = episode_data["success"]
+                episode_group.attrs["duration"] = episode_data["duration"]
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run NEAT evolutions")
@@ -198,26 +241,6 @@ def parse_args():
 
     return parser.parse_args()
 
-def save_population_data_to_h5(population_data):
-    with h5py.File(H5_PATH, "a") as h5file:
-        for genome_data in population_data:
-            group_name = f"evo_{evo}/gen_{current_generation}/genome_{genome_data['genome_id']}"
-            if group_name in h5file:
-                del h5file[group_name]  # Remove existing group to avoid duplication
-            group = h5file.create_group(group_name)
-            group.attrs["success_rate"] = genome_data["success_rate"]
-            group.attrs["avg_duration"] = genome_data["avg_duration"]
-
-            for episode_id, episode_data in enumerate(genome_data["episodes_data"]):
-                episode_group = group.create_group(f"episode_{episode_id}")
-                episode_group.create_dataset("observations", data=np.array(episode_data["observations"]),compression="gzip",
-                compression_opts=4)
-                episode_group.create_dataset("actions", data=np.array(episode_data["actions"]),compression="gzip",
-                compression_opts=4)
-                episode_group.attrs["reward"] = episode_data["reward"]
-                episode_group.attrs["success"] = episode_data["success"]
-                episode_group.attrs["duration"] = episode_data["duration"]
-
 if __name__ == "__main__":
     args = parse_args()
 
@@ -230,6 +253,8 @@ if __name__ == "__main__":
     datetime = str(datetime.now().strftime("%Y%m%d_%H%M%S"))
     model_folder = os.path.join(local_dir, "models", f"{datetime}_neat")
     os.makedirs(model_folder, exist_ok=True)
+
+    range_vals, min_vals = load_limits()
 
     print("Starting NEAT evolutions...")
 
