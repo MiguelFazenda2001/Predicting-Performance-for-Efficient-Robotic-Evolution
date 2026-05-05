@@ -60,7 +60,7 @@ def eval_genome(genome, config, n_episodes):
         total_reward = 0
 
         for step in range(STEP_LIMIT):
-            obs = np.concatenate([dict_obs["observation"],dict_obs["desired_goal"], dict_obs["achieved_goal"]])
+            obs = np.concatenate([dict_obs["observation"],dict_obs["desired_goal"] - dict_obs["achieved_goal"]])
             obs = normalize_observation(obs, range_vals, min_vals)
 
             #observations.append(obs)
@@ -98,6 +98,7 @@ def eval_genome(genome, config, n_episodes):
     genome_data["success_rate"] = success_count / n_episodes
     genome_data["avg_duration"] = float(np.mean(durations))
     genome_data["final_rewards"] = float(np.mean(final_rewards))
+    genome_data["total_rewards"] = float(np.mean(total_rewards))
 
     env.close()
     return np.mean(total_rewards) * 10, genome_data #np.mean(total_rewards)
@@ -167,14 +168,15 @@ def save_population_data_to_json(population_data):
         data[gen_key][genome_id] = {
             "success_rate": genome_data["success_rate"],
             "avg_duration": genome_data["avg_duration"],
-            "final_rewards": genome_data["final_rewards"]
+            "final_rewards": genome_data["final_rewards"],
+            "total_rewards": genome_data["total_rewards"]
         }
 
     # Save back to file
     with open("dataset.json", "a") as f:
         f.write(json.dumps(data) + "\n")
 
-def load_limits(path="observation_limits.json"):
+def load_limits(path="observation_limits_13_obs.json"):
     with open(path, "r") as f:
         data = json.load(f)
 
@@ -228,7 +230,7 @@ def parse_args():
     parser.add_argument(
         "--generations",
         type=int,
-        default=200,
+        default=500,
         help="Number of generations per evolution"
     )
 
