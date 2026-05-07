@@ -1,9 +1,10 @@
 from fitness_evolution import FitnessEvolution
-from predictive_evolution import PredictiveEvolution
+from SR_fitness_evolution import SRFitnessEvolution
+from predictive_evolution_1_ep import PredictiveEvolution
 import json
 import time
 import numpy as np
-
+import os
 
 # ation space: Discrete(4)
 # 0 -> do nothing
@@ -37,23 +38,49 @@ STEP_LIMIT = 500
 
 if __name__ == "__main__":
 
-    fitness_evolver = FitnessEvolution(100, 10, STEP_LIMIT)
-
-    fitness_evolutions_history = fitness_evolver.evolve("config-feedforward.txt", "best_genome_fitness_evolution.pkl")
-
-    json_path = "fitness_evolution_history.json"
-    with open(json_path, "w") as f:
-        json.dump(fitness_evolutions_history, f, indent=4)
     
-    x_mean = np.load("x_mean.npy")
-    x_std = np.load("x_std.npy")
-    y_mean = np.load("y_mean.npy")
-    y_std = np.load("y_std.npy")
+    os.makedirs(f"../neat_models/Predictive_VS_Fitness/30_total_episodes_10_episodes_sr_fitness_evolution", exist_ok=True)
+    os.makedirs(f"../evolutionary_history/Predictive_VS_Fitness/30_total_episodes_10_episodes_sr_fitness_evolution", exist_ok=True)
+    
+    for i in range(25):
+        print(f"Running sr fitness evolution {i+1}/25")
 
-    predictive_evolver = PredictiveEvolution(num_generations=100, n_episodes_to_predict=3, total_n_episodes=10, model_path="predictive_model_3_ep.pth", input_dim=10, x_mean=x_mean, x_std=x_std, y_mean=y_mean, y_std=y_std, step_limit=STEP_LIMIT)
+        fitness_evolver = SRFitnessEvolution(num_generations=150, n_episodes_for_fitness=3, total_n_episodes=30, std=None, step_limit=STEP_LIMIT)
 
-    predictive_evolutions_history = predictive_evolver.evolve("config-feedforward.txt", "best_genome_predictive_evolution.pkl")
+        fitness_evolutions_history = fitness_evolver.evolve("config-feedforward.txt", f"../neat_models/Predictive_VS_Fitness/30_total_episodes_10_episodes_sr_fitness_evolution/best_genome_sr_fitness_evolution_{i+1}.pkl")
 
-    json_path = "predictive_evolution_history.json"
-    with open(json_path, "w") as f:
-        json.dump(predictive_evolutions_history, f, indent=4)
+        json_path = f"../evolutionary_history/Predictive_VS_Fitness/30_total_episodes_10_episodes_sr_fitness_evolution/sr_fitness_evolution_history_{i+1}.json"
+        with open(json_path, "w") as f:
+            json.dump(fitness_evolutions_history, f, indent=4)
+
+    """
+    x_mean = np.load("../files_for_predictive_model/1_ep/x_mean.npy")
+    x_std = np.load("../files_for_predictive_model/1_ep/x_std.npy")
+    y_mean = np.load("../files_for_predictive_model/1_ep/y_mean.npy")
+    y_std = np.load("../files_for_predictive_model/1_ep/y_std.npy")
+
+    duration_multiplier = [0.0]
+
+    for w in duration_multiplier:
+
+        # folder_name_w =  "sr_20"
+
+        os.makedirs(f"../neat_models/Predictive_VS_Fitness/30_total_episodes_1_episodes_predictive_evolution", exist_ok=True)
+        os.makedirs(f"../evolutionary_history/Predictive_VS_Fitness/30_total_episodes_1_episodes_predictive_evolution", exist_ok=True)
+
+        for i in range(25):
+            print(f"Running predictive evolution {i+1}/25")
+
+            predictive_evolver = PredictiveEvolution(num_generations=150, n_episodes_to_predict=1, total_n_episodes=30, model_path="../files_for_predictive_model/1_ep/predictive_model_1_ep.pth", input_dim=10, x_mean=x_mean, x_std=x_std, y_mean=y_mean, y_std=y_std, step_limit=STEP_LIMIT)
+
+            predictive_evolutions_history = predictive_evolver.evolve("config-feedforward.txt", f"../neat_models/Predictive_VS_Fitness/30_total_episodes_1_episodes_predictive_evolution/best_genome_predictive_evolution_{i+1}.pkl")
+
+            json_path = f"../evolutionary_history/Predictive_VS_Fitness/30_total_episodes_1_episodes_predictive_evolution/predictive_evolution_history_{i+1}.json"
+            with open(json_path, "w") as f:
+                json.dump(predictive_evolutions_history, f, indent=4)
+
+    """
+    
+    
+
+
