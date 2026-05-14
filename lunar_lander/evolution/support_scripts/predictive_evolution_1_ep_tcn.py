@@ -12,7 +12,7 @@ from datetime import datetime
 import time
 
 # Predictive Model
-from transformer import EpisodeTransformer
+from tcn import ResidualEpisodeTCN
 import torch
 
 class GenerationTracker(neat.reporting.BaseReporter):
@@ -29,8 +29,8 @@ class PredictiveEvolution:
         self.fitness_history = []
 
         # Load predictive model
-        self.device = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
-        self.predictive_model = EpisodeTransformer(input_dim=input_dim).to(self.device)
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.predictive_model = ResidualEpisodeTCN(input_dim=input_dim).to(self.device)
         self.predictive_model.load_state_dict(torch.load(model_path, map_location=self.device))
         self.predictive_model.eval()
 
@@ -77,8 +77,10 @@ class PredictiveEvolution:
 
         seqs = []
         masks = []
-        for i in range(self.n_episodes_to_predict):
-            idx = np.random.randint(0, self.total_n_episodes)
+
+        idxs = np.random.choice(self.total_n_episodes, self.n_episodes_to_predict, replace=False)
+
+        for idx in idxs:
             seq = np.concatenate([all_obervations[idx], all_actions[idx]], axis=1)
 
             mask = np.ones(self.step_limit, dtype=np.float32)
@@ -92,13 +94,13 @@ class PredictiveEvolution:
                 seq = np.vstack([seq, pad])
                 mask[length:] = 0.0
 
-            seqs.append(seq)
-            masks.append(mask)
+            #seqs.append(seq)
+            #masks.append(mask)
 
         # Normalization
 
-        X = np.array(seqs)
-        M = np.array(masks)
+        X = np.array(seq)
+        M = np.array(mask)
 
         mask_exp = M[..., None]
 
