@@ -2,7 +2,7 @@
 fitness_criterion     = max
 # So it doesnt end prematurely
 fitness_threshold      = 100000
-pop_size               = 100
+pop_size               = 250
 reset_on_extinction    = False
 no_fitness_termination = False
 

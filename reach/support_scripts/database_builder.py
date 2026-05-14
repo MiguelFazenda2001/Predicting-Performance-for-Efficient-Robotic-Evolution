@@ -14,7 +14,7 @@ from multiprocessing import Pool, cpu_count
 
 
 STEP_LIMIT = 150
-H5_PATH = "/mnt/DATA/miguelfazenda/pickplace/dataset/raw/test_episodes.h5"
+H5_PATH = "/mnt/DATA/miguelfazenda/reach/dataset/raw/train_episodes.h5"
 
 current_generation = 0
 evo = 0
@@ -63,9 +63,9 @@ def eval_genome(genome, config, n_episodes):
             obs = np.concatenate([dict_obs["observation"],dict_obs["desired_goal"] - dict_obs["achieved_goal"]])
             obs = normalize_observation(obs, range_vals, min_vals)
 
-            #observations.append(obs)
+            observations.append(obs)
             action = np.clip(net.activate(obs), -1.0, 1.0)
-            #actions.append(action)
+            actions.append(action)
 
             dict_obs, reward, terminated, truncated, info = env.step(action)
 
@@ -78,7 +78,7 @@ def eval_genome(genome, config, n_episodes):
             success = 1
             success_count += 1
             total_reward += 100
-            print(f"Genome {genome.key} Success in episode {episode_id} with reward {reward:.2f} and total_reward {total_reward:.2f}")
+            #print(f"Genome {genome.key} Success in episode {episode_id} with reward {reward:.2f} and total_reward {total_reward:.2f}")
         else:
             success = 0
 
@@ -88,12 +88,11 @@ def eval_genome(genome, config, n_episodes):
         durations.append(duration)
         total_rewards.append(total_reward)
 
-        #episode_data["observations"] = observations
-        #episode_data["actions"] = actions
-        #episode_data["reward"] = reward
-        #episode_data["success"] = success
-        #episode_data["duration"] = duration
-        #genome_data["episodes_data"].append(episode_data)
+        episode_data["observations"] = observations
+        episode_data["actions"] = actions
+        episode_data["success"] = success
+        episode_data["duration"] = duration
+        genome_data["episodes_data"].append(episode_data)
 
     genome_data["success_rate"] = success_count / n_episodes
     genome_data["avg_duration"] = float(np.mean(durations))
@@ -101,7 +100,7 @@ def eval_genome(genome, config, n_episodes):
     genome_data["total_rewards"] = float(np.mean(total_rewards))
 
     env.close()
-    return np.mean(total_rewards) * 10, genome_data #np.mean(total_rewards)
+    return np.mean(final_rewards) * 10, genome_data #np.mean(total_rewards)
 
 # --- Evaluate an entire population ---
 def eval_population(genomes, config, n_episodes):
@@ -116,10 +115,11 @@ def eval_population(genomes, config, n_episodes):
 
     for genome_id, reward, genome_data in results:        
         genome_map[genome_id].fitness = reward
-        population_data.append(genome_data)
+        if genome_data["success_rate"] > 0.19:  # Only include genomes with success rates
+            population_data.append(genome_data)
     
-    #save_population_data_to_h5(population_data)
-    save_population_data_to_json(population_data)
+    save_population_data_to_h5(population_data)
+    #save_population_data_to_json(population_data)
 
 def eval_worker(args):
     genome, config, n_episodes = args
@@ -200,12 +200,14 @@ def normalize_observation(obs, range_vals, min_vals):
 def save_population_data_to_h5(population_data):
     with h5py.File(H5_PATH, "a") as h5file:
         for genome_data in population_data:
-            group_name = f"evo_{evo}/gen_{current_generation}/genome_{genome_data['genome_id']}"
+            group_name = f"evo_{evo+20}/gen_{current_generation}/genome_{genome_data['genome_id']}"
             if group_name in h5file:
                 del h5file[group_name]  # Remove existing group to avoid duplication
             group = h5file.create_group(group_name)
             group.attrs["success_rate"] = genome_data["success_rate"]
             group.attrs["avg_duration"] = genome_data["avg_duration"]
+            group.attrs["final_rewards"] = genome_data["final_rewards"]
+            group.attrs["total_rewards"] = genome_data["total_rewards"]
 
             for episode_id, episode_data in enumerate(genome_data["episodes_data"]):
                 episode_group = group.create_group(f"episode_{episode_id}")
@@ -213,7 +215,6 @@ def save_population_data_to_h5(population_data):
                 compression_opts=4)
                 episode_group.create_dataset("actions", data=np.array(episode_data["actions"]),compression="gzip",
                 compression_opts=4)
-                episode_group.attrs["reward"] = episode_data["reward"]
                 episode_group.attrs["success"] = episode_data["success"]
                 episode_group.attrs["duration"] = episode_data["duration"]
 
@@ -223,14 +224,14 @@ def parse_args():
     parser.add_argument(
         "--evolutions",
         type=int,
-        default=1,
+        default=30,
         help="Number of evolutions to run"
     )
 
     parser.add_argument(
         "--generations",
         type=int,
-        default=500,
+        default=300,
         help="Number of generations per evolution"
     )
 
