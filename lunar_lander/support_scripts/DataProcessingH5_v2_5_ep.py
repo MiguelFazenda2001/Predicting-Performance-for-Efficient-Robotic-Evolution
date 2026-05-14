@@ -4,11 +4,15 @@ import os
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
 from tcn import EpisodeDataset
+from itertools import combinations
+import time
+import gc
 
 H5_PATH = "/mnt/DATA/miguelfazenda/25_evo_episodes.h5"
 SAVE_PATH = "../data"
 MAX_LEN = 500
-
+MAX_COMBOS = 5  # max episode pairs per genome
+N_EPISODES = 5
 
 class DataProcessingH5:
     def __init__(self):
@@ -16,11 +20,13 @@ class DataProcessingH5:
 
     def data_processing_h5(self,save_path=SAVE_PATH, h5_path=H5_PATH, max_len=MAX_LEN):
         rate_to_locations = {}
+        rng = np.random.default_rng(42)
 
         with h5py.File(h5_path, "r") as h5:
             for evo in h5.values():
                 for gen in evo.values():
                     for genome in gen.values():
+                        print(f"Processing genome: {genome.name}")
 
                         if "success_rate" not in genome.attrs:
                             continue
@@ -29,16 +35,17 @@ class DataProcessingH5:
 
                         episodes = list(genome.values())
 
-                        pair_count = len(episodes) - 1
+                        ep_indices = list(range(len(episodes)))
 
-                        for pair_idx in range(pair_count):
+                        all_triplets = list(combinations(ep_indices, N_EPISODES))
+                        rng.shuffle(all_triplets)
+                        triplets = all_triplets[:MAX_COMBOS]
+                        for triplet in triplets:
                             rate_to_locations.setdefault(success, []).append(
-                                (genome.name, pair_idx)
+                                (genome.name, triplet)
                             )
 
         min_count = min(len(v) for v in rate_to_locations.values())
-
-        rng = np.random.default_rng(42)
 
         selected = {}
         for rate, locs in rate_to_locations.items():
@@ -50,13 +57,18 @@ class DataProcessingH5:
         # ---------- PASS 2: load only selected ----------
         X_list, y_list, mask_list = [], [], []
 
+        i = 0
+        total = sum(len(locs) for locs in selected.values())
+
         with h5py.File(h5_path, "r") as h5:
 
             genome_cache = {}
 
             for rate, locs in selected.items():
 
-                for genome_name, pair_idx in locs:
+                for genome_name, triplet in locs:
+                    print(f"{i}/{total} -- Loading genome: {genome_name}")
+                    i += 1
 
                     genome = h5[genome_name]
 
@@ -67,13 +79,12 @@ class DataProcessingH5:
 
                     episodes = list(genome.values())
 
-                    ep1 = episodes[pair_idx]
-                    ep2 = episodes[pair_idx+1]
+                    selected_eps = [episodes[i] for i in triplet]
 
                     seqs = []
                     masks = []
 
-                    for ep in [ep1, ep2]:
+                    for ep in selected_eps:
 
                         obs = ep["observations"][:]
                         acts = ep["actions"][:]
@@ -102,8 +113,16 @@ class DataProcessingH5:
         print("Finished loading balanced dataset")
 
         X = np.asarray(X_list, dtype=np.float32)
+        del  X_list
+        gc.collect()
+
         y = np.asarray(y_list, dtype=np.float32)
+        del y_list
+        gc.collect()
+
         M = np.asarray(mask_list, dtype=np.float32)
+        del mask_list
+        gc.collect()
 
         print("Balanced counts:")
         for r in np.unique(y[:,0]):
@@ -112,6 +131,11 @@ class DataProcessingH5:
         X_train, X_val, y_train, y_val, M_train, M_val = train_test_split(
             X, y, M, test_size=0.2, random_state=42, shuffle=True, stratify=y[:, 0]
         )
+
+        input_dim = X.shape[3]
+
+        del X, y, M
+        gc.collect()
 
         X_train, X_val = self.__normalize(X_train, M_train, X_val, M_val, save_path)
 
@@ -131,7 +155,7 @@ class DataProcessingH5:
             pin_memory=True
         )
 
-        return train_loader, val_loader, X.shape[3]
+        return train_loader, val_loader, input_dim
 
     def denormalize_targets(self, y_norm, save_path=SAVE_PATH):
         mean = np.load(f"{save_path}/y_mean.npy")

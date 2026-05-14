@@ -1,7 +1,7 @@
 import h5py
 import pandas as pd
 
-H5_PATH = "data/episodes.h5"
+H5_PATH = "/mnt/DATA/miguelfazenda/lunar_lander/dataset/raw/25_evo_episodes.h5"
 
 def main():
     success_rates = []
