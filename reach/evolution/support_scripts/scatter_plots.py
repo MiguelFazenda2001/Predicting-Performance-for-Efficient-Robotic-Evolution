@@ -5,12 +5,14 @@ import plotly.express as px
 
 def load_data(file_paths, label):
     rows = []
-    
+
     for i, file in enumerate(file_paths):
         with open(file, 'r') as f:
-            data = json.load(f)
-            
-            for entry in data:
+
+            # Read line by line (JSONL format)
+            for line in f:
+                entry = json.loads(line)
+
                 rows.append({
                     "generation": entry["generation"],
                     "fitness": entry["fitness"],
@@ -20,23 +22,21 @@ def load_data(file_paths, label):
                     "type": label,
                     "run": i
                 })
-    
+
     return rows
 
-_10_episodes_fitness_evolution_files = glob.glob("../evolutionary_history/prediction_with_avg_time/10_episodes_fitness_evolution/*.json")
-_10_episodes_d_mul_25_files = glob.glob("../evolutionary_history/prediction_with_avg_time/10_ep_dur_mul_25_fitness_evolution/*.json")
-_3_ep_duration_mul_0_predictive_evolution_files = glob.glob("../evolutionary_history/prediction_with_avg_time/3_ep_dur_mul_0_predictive_evolution/*.json")
-_3_ep_noise_200_fitness_evolution_files = glob.glob("../evolutionary_history/prediction_with_avg_time/3_ep_noise_200_fitness_evolution/*.json")
-_5_ep_noise_200_fitness_evolution_files = glob.glob("../evolutionary_history/prediction_with_avg_time/5_ep_noise_200_fitness_evolution/*.json")
-_10_ep_noise_200_fitness_evolution_files = glob.glob("../evolutionary_history/prediction_with_avg_time/10_ep_noise_200_fitness_evolution/*.json")
+_10_episodes_fitness_evolution_files = glob.glob("../evolutionary_history/30_total_episodes_10_episodes_fitness_evolution/*.json")
+_1_episodes_fitness_evolution_files = glob.glob("../evolutionary_history/30_total_episodes_1_episodes_fitness_evolution/*.json")
+_1_episodes_predictive_evolution_files = glob.glob("../evolutionary_history/30_total_episodes_1_episodes_predictive_evolution/*.json")
+_3_episodes_fitness_evolution_files = glob.glob("../evolutionary_history/30_total_episodes_3_episodes_fitness_evolution/*.json")
+_3_episodes_predictive_evolution_files = glob.glob("../evolutionary_history/30_total_episodes_3_episodes_predictive_evolution/*.json")
 
 df = pd.DataFrame(
     load_data(_10_episodes_fitness_evolution_files, "10_ep_fitness") +
-    load_data(_10_episodes_d_mul_25_files, "10_ep_duration_multiplier_25") +
-    load_data(_3_ep_duration_mul_0_predictive_evolution_files, "3_ep_duration_multiplier_0_predictive") + 
-    load_data(_3_ep_noise_200_fitness_evolution_files, "3_ep_noise_200_fitness") +
-    load_data(_5_ep_noise_200_fitness_evolution_files, "5_ep_noise_200_fitness") +
-    load_data(_10_ep_noise_200_fitness_evolution_files, "10_ep_noise_200_fitness")
+    load_data(_1_episodes_fitness_evolution_files, "1_ep_fitness") +
+    load_data(_1_episodes_predictive_evolution_files, "1_ep_predictive") +
+    load_data(_3_episodes_fitness_evolution_files, "3_ep_fitness") +
+    load_data(_3_episodes_predictive_evolution_files, "3_ep_predictive")
 )
 
 

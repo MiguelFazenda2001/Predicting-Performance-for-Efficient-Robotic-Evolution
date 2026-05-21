@@ -19,14 +19,14 @@ class GenerationTracker(neat.reporting.BaseReporter):
         current_generation = generation
 
 class FitnessEvolution:
-    def __init__(self, num_generations, n_episodes_for_fitness, total_n_episodes, std=None, duration_multiplier = 0, step_limit=500):
+    def __init__(self, num_generations, n_episodes_for_fitness, total_n_episodes, fitness_history_path, std=None, duration_multiplier = 0, step_limit=150):
         self.num_generations = num_generations
         self.n_episodes_for_fitness = n_episodes_for_fitness
         self.total_n_episodes = total_n_episodes
+        self.fitness_history_path = fitness_history_path
         self.std = std
         self.duration_multiplier = duration_multiplier
         self.step_limit = step_limit
-        self.fitness_history = []
         self.range_vals, self.min_vals = self.load_limits()
 
     def load_limits(self, path="observation_limits_13_obs.json"):
@@ -56,6 +56,7 @@ class FitnessEvolution:
             dict_obs, _ = env.reset()
             total_reward = 0
             episode_duration = 0
+            success_step = None
 
             for step in range(self.step_limit):
                 obs = np.concatenate([dict_obs["observation"],dict_obs["desired_goal"] - dict_obs["achieved_goal"]])
@@ -67,12 +68,22 @@ class FitnessEvolution:
 
                 total_reward += reward 
 
+                if reward >= -0.05 and success_step is None:
+                    success_step = step
+                elif reward < -0.05:
+                    success_step = None
+
                 if terminated or truncated:
                     break
 
             if reward >= -0.05:
                 success_count += 1
                 total_reward += 100
+            
+            if success_step is None:
+                success_step = self.step_limit - 1
+
+            episode_duration = success_step / env.metadata["render_fps"]
 
             total_rewards.append(total_reward)
             final_rewards.append(reward)
@@ -99,11 +110,13 @@ class FitnessEvolution:
         with Pool(processes=50) as pool:
             results = pool.map(self.eval_worker, args)
         
+        
+        
         for genome_id,  reward, success_rate, fitness_all_episodes, average_episode_duration, avg_ep_duration_all_episodes, evaluation_time in results:
             
             genome_map[genome_id].fitness = reward - (self.duration_multiplier * (average_episode_duration * 0.2)) # *0.2 to scale avg duration to 0-100
             
-            self.fitness_history.append({
+            entry = {
                 "generation": current_generation,
                 "genome_id": genome_id,
                 "used_fitness": reward,
@@ -112,7 +125,12 @@ class FitnessEvolution:
                 "average_episode_duration": average_episode_duration,
                 "avg_ep_duration_all_episodes": avg_ep_duration_all_episodes,
                 "evaluation_time": evaluation_time
-            })
+            }
+            self.save_fitness_entry(entry)
+
+    def save_fitness_entry(self, entry):
+        with open(self.fitness_history_path, "a") as f:
+            f.write(json.dumps(entry) + "\n")
 
     def eval_worker(self, args):
         genome, config = args
@@ -120,6 +138,7 @@ class FitnessEvolution:
         reward, success_rate, fitness_all_episodes, average_episode_duration, avg_ep_duration_all_episodes = self.evaluate_genome(genome, config)
         time_end = time.time()
         evaluation_time = time_end - time_start
+        evaluation_time = (evaluation_time / self.total_n_episodes) * self.n_episodes_for_fitness
         return genome.key, reward, success_rate, fitness_all_episodes, average_episode_duration, avg_ep_duration_all_episodes, evaluation_time
 
 
@@ -142,7 +161,7 @@ class FitnessEvolution:
         with open(model_path, "wb") as f:
             pickle.dump(best_genome, f)
 
-        return self.fitness_history
+        return
 
     def normalize_observation(self, obs):
         # scale to [0,1]

@@ -11,7 +11,7 @@ class EpisodeTransformer(nn.Module):
     def __init__(
         self,
         input_dim,
-        num_episodes=3,
+        num_episodes=1,
         max_time=512,
         d_model=256,
         nhead=8,
