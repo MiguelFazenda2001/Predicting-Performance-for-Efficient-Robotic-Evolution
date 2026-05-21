@@ -24,7 +24,7 @@ def test_saved_model(config_file, model_path="models/temp.pkl"):
 
     net = neat.nn.FeedForwardNetwork.create(genome, config)
 
-    env = gym.make('FetchPickAndPlace-v4', max_episode_steps=STEP_LIMIT, render_mode="human")
+    env = gym.make('FetchPickAndPlaceDense-v4', max_episode_steps=STEP_LIMIT, render_mode="human")
     obs_dict, _ = env.reset(seed=None)
     total_reward = 0
     for _ in range(500):

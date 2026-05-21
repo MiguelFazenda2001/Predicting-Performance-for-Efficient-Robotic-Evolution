@@ -1,8 +1,8 @@
 [NEAT]
 fitness_criterion     = max
 # So it doesnt end prematurely
-fitness_threshold      = 10000
-pop_size               = 50
+fitness_threshold      = 100000
+pop_size               = 250
 reset_on_extinction    = False
 no_fitness_termination = False
 
@@ -41,7 +41,7 @@ node_add_prob           = 0.3
 node_delete_prob        = 0.2
 
 num_hidden              = 0
-num_inputs              = 31
+num_inputs              = 28
 num_outputs             = 4
 
 response_init_type      = gaussian
