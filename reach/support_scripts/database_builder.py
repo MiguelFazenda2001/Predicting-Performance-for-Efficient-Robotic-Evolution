@@ -58,6 +58,7 @@ def eval_genome(genome, config, n_episodes):
         dict_obs, _ = env.reset()
         observations, actions = [], []
         total_reward = 0
+        success_step = None
 
         for step in range(STEP_LIMIT):
             obs = np.concatenate([dict_obs["observation"],dict_obs["desired_goal"] - dict_obs["achieved_goal"]])
@@ -71,6 +72,11 @@ def eval_genome(genome, config, n_episodes):
 
             total_reward += reward 
 
+            if reward >= -0.05 and success_step is None:
+                success_step = step
+            elif reward < -0.05:
+                success_step = None
+
             if terminated or truncated:
                 break
 
@@ -82,9 +88,12 @@ def eval_genome(genome, config, n_episodes):
         else:
             success = 0
 
+        if success_step is None:
+            success_step = STEP_LIMIT - 1
+
         final_rewards.append(reward)
 
-        duration = step / env.metadata["render_fps"]
+        duration = success_step / env.metadata["render_fps"]
         durations.append(duration)
         total_rewards.append(total_reward)
 
@@ -110,14 +119,21 @@ def eval_population(genomes, config, n_episodes):
 
     args = [(genome, config, n_episodes) for _, genome in genomes]
 
-    with Pool(processes=25) as pool:
+    with Pool(processes=50) as pool:
         results = pool.map(eval_worker, args)
+
+
 
     for genome_id, reward, genome_data in results:        
         genome_map[genome_id].fitness = reward
-        if genome_data["success_rate"] > 0.19:  # Only include genomes with success rates
+        if evo >= 15:
+            if genome_data["success_rate"] > 0.19:  # Only include genomes with success rates
+                population_data.append(genome_data)
+        else:
             population_data.append(genome_data)
     
+    print(len(population_data))
+
     save_population_data_to_h5(population_data)
     #save_population_data_to_json(population_data)
 
@@ -200,7 +216,7 @@ def normalize_observation(obs, range_vals, min_vals):
 def save_population_data_to_h5(population_data):
     with h5py.File(H5_PATH, "a") as h5file:
         for genome_data in population_data:
-            group_name = f"evo_{evo+20}/gen_{current_generation}/genome_{genome_data['genome_id']}"
+            group_name = f"evo_{evo}/gen_{current_generation}/genome_{genome_data['genome_id']}"
             if group_name in h5file:
                 del h5file[group_name]  # Remove existing group to avoid duplication
             group = h5file.create_group(group_name)
@@ -224,7 +240,7 @@ def parse_args():
     parser.add_argument(
         "--evolutions",
         type=int,
-        default=30,
+        default=50,
         help="Number of evolutions to run"
     )
 
