@@ -32,11 +32,11 @@ _3_episodes_fitness_evolution_files = glob.glob("../evolutionary_history/30_tota
 _3_episodes_predictive_evolution_files = glob.glob("../evolutionary_history/30_total_episodes_3_episodes_predictive_evolution_300_gens/*.json")    
 
 df = pd.DataFrame(
-    load_data(_10_episodes_fitness_evolution_files, "10_ep_fitness") +
-    load_data(_1_episodes_fitness_evolution_files, "1_ep_fitness") +
-    load_data(_1_episodes_predictive_evolution_files, "1_ep_predictive") +
-    load_data(_3_episodes_fitness_evolution_files, "3_ep_fitness")+ 
-    load_data(_3_episodes_predictive_evolution_files, "3_ep_predictive")
+    load_data(_10_episodes_fitness_evolution_files, "Fitness Evolution (10 episodes)") +
+    load_data(_1_episodes_fitness_evolution_files, "Fitness Evolution (1 episode)") +
+    load_data(_1_episodes_predictive_evolution_files, "Predictive Evolution (1 episode)") +
+    load_data(_3_episodes_fitness_evolution_files, "Fitness Evolution (3 episodes)")+ 
+    load_data(_3_episodes_predictive_evolution_files, "Predictive Evolution (3 episodes)")
 )
 
 
