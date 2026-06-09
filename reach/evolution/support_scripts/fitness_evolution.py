@@ -19,11 +19,12 @@ class GenerationTracker(neat.reporting.BaseReporter):
         current_generation = generation
 
 class FitnessEvolution:
-    def __init__(self, num_generations, n_episodes_for_fitness, total_n_episodes, fitness_history_path, std=None, duration_multiplier = 0, step_limit=150):
+    def __init__(self, num_generations, n_episodes_for_fitness, total_n_episodes, fitness_history_path, checkpoint_path, std=None, duration_multiplier = 0, step_limit=150):
         self.num_generations = num_generations
         self.n_episodes_for_fitness = n_episodes_for_fitness
         self.total_n_episodes = total_n_episodes
         self.fitness_history_path = fitness_history_path
+        self.checkpoint_path = checkpoint_path
         self.std = std
         self.duration_multiplier = duration_multiplier
         self.step_limit = step_limit
@@ -127,10 +128,23 @@ class FitnessEvolution:
                 "evaluation_time": evaluation_time
             }
             self.save_fitness_entry(entry)
+        
+        self.cleanup_old_checkpoints()
 
     def save_fitness_entry(self, entry):
         with open(self.fitness_history_path, "a") as f:
             f.write(json.dumps(entry) + "\n")
+
+    def cleanup_old_checkpoints(self, keep_last=2):
+        checkpoint_files = sorted(
+            glob.glob(f"{self.checkpoint_path}*"),
+            key=os.path.getmtime
+        )
+
+        if len(checkpoint_files) > keep_last:
+            for old_file in checkpoint_files[:-keep_last]:
+                os.remove(old_file)
+                print(f"Deleted old checkpoint: {old_file}")
 
     def eval_worker(self, args):
         genome, config = args
@@ -150,11 +164,19 @@ class FitnessEvolution:
             neat.DefaultStagnation,
             config_file,
         )
-        population = neat.Population(config)
+        checkpoint_files = sorted(glob.glob(f"{self.checkpoint_path}*"), key=os.path.getmtime)
+
+        if checkpoint_files:
+            latest_checkpoint = checkpoint_files[-1]
+            print(f"Restoring from checkpoint: {latest_checkpoint}")
+            population = neat.Checkpointer.restore_checkpoint(latest_checkpoint)
+        else:
+            population = neat.Population(config)
 
         population.add_reporter(neat.StdOutReporter(True))
         population.add_reporter(neat.StatisticsReporter())
         population.add_reporter(GenerationTracker())
+        population.add_reporter(neat.Checkpointer(generation_interval=1, filename_prefix=self.checkpoint_path))
 
         best_genome = population.run(lambda genomes, config: self.eval_population(genomes, config), self.num_generations)
 

@@ -5,39 +5,38 @@ import plotly.express as px
 
 def load_data(file_paths, label):
     rows = []
-    
+
     for i, file in enumerate(file_paths):
         with open(file, 'r') as f:
-            data = json.load(f)
-            
-            for entry in data:
+
+            # Read line by line (JSONL format)
+            for line in f:
+                entry = json.loads(line)
+
                 rows.append({
                     "generation": entry["generation"],
                     "fitness": entry["fitness"],
                     "success_rate": entry["success_rate"],
                     "evaluation_time": entry["evaluation_time"],
+                    "avg_ep_duration_all_episodes": entry["avg_ep_duration_all_episodes"],
                     "type": label,
                     "run": i
                 })
-    
+
     return rows
 
-_10_episodes_files = glob.glob("../evolutionary_history/Predictive_VS_Fitness/10_episodes_fitness_evolution/*.json")
-
-_10_episodes_SR_fitness_evolution_files = glob.glob("../evolutionary_history/Predictive_VS_Fitness/10_episodes_SR_fitness_evolution/*.json")
-_10_episodes_predictive_evolution_files = glob.glob("../evolutionary_history/Predictive_VS_Fitness/10_episodes_predictive_evolution/*.json")
-sr_10_ep_noise_fitness_evolution_files = glob.glob("../evolutionary_history/prediction_with_avg_time/10_ep_noise_fitness_evolution/*.json")
-
-
-
-
-
+_10_episodes_fitness_evolution_files = glob.glob("../evolutionary_history/30_total_episodes_10_episodes_fitness_evolution_300_gens/*.json")
+_1_episodes_fitness_evolution_files = glob.glob("../evolutionary_history/30_total_episodes_1_episodes_fitness_evolution_300_gens/*.json")
+_1_episodes_predictive_evolution_files = glob.glob("../evolutionary_history/30_total_episodes_1_episodes_predictive_evolution_300_gens/*.json")
+_3_episodes_fitness_evolution_files = glob.glob("../evolutionary_history/30_total_episodes_3_episodes_fitness_evolution_300_gens/*.json")
+_3_episodes_predictive_evolution_files = glob.glob("../evolutionary_history/30_total_episodes_3_episodes_predictive_evolution_300_gens/*.json")    
 
 df = pd.DataFrame(
-    load_data(_10_episodes_files, "10_ep") +
-    load_data(_10_episodes_SR_fitness_evolution_files, "10_ep_SR_fitness") +
-    load_data(_10_episodes_predictive_evolution_files, "10_ep_predictive") +
-    load_data(sr_10_ep_noise_fitness_evolution_files, "10_ep_noise_fitness")
+    load_data(_10_episodes_fitness_evolution_files, "10_ep_fitness") +
+    load_data(_1_episodes_fitness_evolution_files, "1_ep_fitness") +
+    load_data(_1_episodes_predictive_evolution_files, "1_ep_predictive") +
+    load_data(_3_episodes_fitness_evolution_files, "3_ep_fitness")+ 
+    load_data(_3_episodes_predictive_evolution_files, "3_ep_predictive")
 )
 
 

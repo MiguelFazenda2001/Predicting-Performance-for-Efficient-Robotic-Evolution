@@ -13,7 +13,7 @@ from datetime import datetime
 import time
 import multiprocessing as mp
 
-from transformer_3_ep import EpisodeTransformer
+from transformer_1_ep import EpisodeTransformer
 import torch
 
 class GenerationTracker(neat.reporting.BaseReporter):
