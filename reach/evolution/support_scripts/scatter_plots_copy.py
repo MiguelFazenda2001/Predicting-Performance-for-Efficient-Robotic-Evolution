@@ -63,7 +63,7 @@ df_all_mean = (
 
 df_all_mean["metric"] = "All genomes"
 
-df_plot = pd.concat([df_best_mean, df_all_mean])
+df_plot = pd.concat([df_all_mean, df_best_mean])
 
 fig = px.line(
     df_plot,
@@ -71,14 +71,45 @@ fig = px.line(
     y="fitness",
     color="type",
     line_dash="metric",  # distinguishes best vs all
-    title="Fitness Evolution Comparison",
+    title="Fitness Values",
     line_dash_map={
         "Best per generation": "dash",
         "All genomes": "solid"
     }
 )
 
+# Make lines thicker
 fig.update_traces(line=dict(width=3))
+
+# Hide duplicate legends
+seen = set()
+
+for trace in fig.data:
+    name = trace.name.split(",")[0]  # keep only the type name
+
+    if name in seen:
+        trace.showlegend = False
+    else:
+        trace.name = name
+        seen.add(name)
+
+# Add style explanation traces
+fig.add_scatter(
+    x=[None],
+    y=[None],
+    mode="lines",
+    line=dict(color="black", dash="solid", width=3),
+    name="Solid = Mean"
+)
+
+fig.add_scatter(
+    x=[None],
+    y=[None],
+    mode="lines",
+    line=dict(color="black", dash="dash", width=3),
+    name="Dashed = Best"
+)
+
 fig.update_layout(
     legend_title_text="",
     xaxis_title="Generation",
@@ -86,7 +117,7 @@ fig.update_layout(
 )
 
 fig.show()
-fig.write_html("normal_vs_noise_fitness_evolution_10_v_3_v_1.html")
+fig.write_html("F_predictive_vs_sr_evolution_10_v_3_v_1.html")
 
 """
 #--------------------------------------------------------------------
@@ -114,7 +145,7 @@ df_all_mean = (
 
 df_all_mean["metric"] = "All genomes"
 
-df_plot = pd.concat([df_best_mean, df_all_mean])
+df_plot = pd.concat([df_all_mean, df_best_mean])
 
 fig = px.line(
     df_plot,
@@ -126,10 +157,41 @@ fig = px.line(
         "Best per generation": "dash",
         "All genomes": "solid"
     },
-    title="Success Rate Comparison"
+    title="Success Rate"
 )
 
+# Make lines thicker
 fig.update_traces(line=dict(width=3))
+
+# Hide duplicate legends
+seen = set()
+
+for trace in fig.data:
+    name = trace.name.split(",")[0]  # keep only the type name
+
+    if name in seen:
+        trace.showlegend = False
+    else:
+        trace.name = name
+        seen.add(name)
+
+# Add style explanation traces
+fig.add_scatter(
+    x=[None],
+    y=[None],
+    mode="lines",
+    line=dict(color="black", dash="solid", width=3),
+    name="Solid = Mean"
+)
+
+fig.add_scatter(
+    x=[None],
+    y=[None],
+    mode="lines",
+    line=dict(color="black", dash="dash", width=3),
+    name="Dashed = Best"
+)
+
 fig.update_layout(
     legend_title_text="",
     xaxis_title="Generation",
@@ -137,7 +199,7 @@ fig.update_layout(
 )
 
 fig.show()
-fig.write_html("SR_normal_vs_noise_fitness_evolution_10_v_3_v_1.html")
+fig.write_html("SR_predictive_vs_sr_evolution_10_v_3_v_1.html")
 
 """
 #--------------------------------------------------------------------
@@ -167,9 +229,10 @@ fig = px.line(
     x="generation",
     y="cumulative_time",
     color="type",
-    title="Mean Cumulative Evaluation Time per Generation"
+    title="Cumulative Evaluation Time"
 )
 
+# Make lines thicker
 fig.update_traces(line=dict(width=3))
 
 fig.update_layout(
@@ -179,4 +242,4 @@ fig.update_layout(
 )
 
 fig.show()
-fig.write_html("TT_normal_vs_noise_fitness_evolution_10_v_3_v_1.html")
+fig.write_html("TT_predictive_vs_sr_evolution_10_v_3_v_1.html")
