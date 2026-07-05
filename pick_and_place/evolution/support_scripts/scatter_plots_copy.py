@@ -2,44 +2,41 @@ import json
 import glob
 import pandas as pd
 import plotly.express as px
-import plotly.io as pio
-pio.get_chrome()
 
 def load_data(file_paths, label):
     rows = []
-    
+
     for i, file in enumerate(file_paths):
         with open(file, 'r') as f:
-            data = json.load(f)
-            
-            for entry in data:
+
+            # Read line by line (JSONL format)
+            for line in f:
+                entry = json.loads(line)
+
                 rows.append({
                     "generation": entry["generation"],
                     "fitness": entry["fitness"],
                     "success_rate": entry["success_rate"],
                     "evaluation_time": entry["evaluation_time"],
+                    "avg_ep_duration_all_episodes": entry["avg_ep_duration_all_episodes"],
                     "type": label,
                     "run": i
                 })
-    
+
     return rows
 
-_10_episodes_fitness_files = glob.glob("../evolutionary_history/Predictive_VS_Fitness/30_total_episodes_10_episodes_fitness_evolution/*.json")
-_3_episodes_fitness_files = glob.glob("../evolutionary_history/Predictive_VS_Fitness/30_total_episodes_3_episodes_fitness_evolution/*.json")
-_3_episodes_predictive_files = glob.glob("../evolutionary_history/Predictive_VS_Fitness/30_total_episodes_3_episodes_predictive_evolution/*.json")
-_1_episodes_fitness_files = glob.glob("../evolutionary_history/Predictive_VS_Fitness/30_total_episodes_1_episodes_fitness_evolution/*.json")
-_1_episodes_predictive_files = glob.glob("../evolutionary_history/Predictive_VS_Fitness/30_total_episodes_1_episodes_predictive_evolution/*.json")
-_1_episodes_predictive_tcn_files = glob.glob("../evolutionary_history/Predictive_VS_Fitness/30_total_episodes_1_episodes_predictive_tcn_evolution/*.json")
-
-
+_10_episodes_fitness_evolution_files = glob.glob("../evolutionary_history/30_total_episodes_10_episodes_fitness_evolution_300_gens/*.json")
+_1_episodes_fitness_evolution_files = glob.glob("../evolutionary_history/30_total_episodes_1_episodes_fitness_evolution_300_gens/*.json")
+_1_episodes_predictive_evolution_files = glob.glob("../evolutionary_history/30_total_episodes_1_episodes_predictive_evolution_300_gens/*.json")
+_3_episodes_fitness_evolution_files = glob.glob("../evolutionary_history/30_total_episodes_3_episodes_fitness_evolution_300_gens/*.json")
+_3_episodes_predictive_evolution_files = glob.glob("../evolutionary_history/30_total_episodes_3_episodes_predictive_evolution_300_gens/*.json")    
 
 df = pd.DataFrame(
-    load_data(_10_episodes_fitness_files, "Fitness Evolution (10 episodes)") +
-    load_data(_3_episodes_fitness_files, "Fitness Evolution (3 episodes)") +
-    load_data(_3_episodes_predictive_files, "Predictive Evolution (3 episodes)") +
-    load_data(_1_episodes_fitness_files, "Fitness Evolution (1 episode)") +
-    load_data(_1_episodes_predictive_files, "Predictive Evolution (1 episode)") +
-    load_data(_1_episodes_predictive_tcn_files, "Predictive TCN Evolution (1 episode)")
+    load_data(_10_episodes_fitness_evolution_files, "Fitness Evolution (10 episodes)") +
+    load_data(_1_episodes_fitness_evolution_files, "Fitness Evolution (1 episode)") +
+    load_data(_1_episodes_predictive_evolution_files, "Predictive Evolution (1 episode)") +
+    load_data(_3_episodes_fitness_evolution_files, "Fitness Evolution (3 episodes)")+ 
+    load_data(_3_episodes_predictive_evolution_files, "Predictive Evolution (3 episodes)")
 )
 
 
@@ -121,7 +118,6 @@ fig.update_layout(
 
 fig.show()
 fig.write_html("F_predictive_vs_sr_evolution_10_v_3_v_1.html")
-fig.write_image("F_predictive_vs_sr_evolution_10_v_3_v_1.pdf")
 
 """
 #--------------------------------------------------------------------
@@ -179,7 +175,6 @@ for trace in fig.data:
         trace.name = name
         seen.add(name)
 
-
 # Add style explanation traces
 fig.add_scatter(
     x=[None],
@@ -198,15 +193,13 @@ fig.add_scatter(
 )
 
 fig.update_layout(
-    #legend_title_text="",
-    showlegend=False,
+    legend_title_text="",
     xaxis_title="Generation",
     yaxis_title="Success Rate"
 )
 
 fig.show()
 fig.write_html("SR_predictive_vs_sr_evolution_10_v_3_v_1.html")
-fig.write_image("SR_predictive_vs_sr_evolution_10_v_3_v_1.pdf")
 
 """
 #--------------------------------------------------------------------

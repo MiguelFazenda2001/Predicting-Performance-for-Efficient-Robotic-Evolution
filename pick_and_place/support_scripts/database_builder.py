@@ -31,7 +31,7 @@ class GenerationTracker(neat.reporting.BaseReporter):
 
 # --- Evaluate one genome ---
 def eval_genome(genome, config, n_episodes):
-    env = gym.make('FetchPickAndPlaceDense-v4', max_episode_steps=STEP_LIMIT)
+    env = gym.make('FetchPushDense-v4', max_episode_steps=STEP_LIMIT)
 
     net = neat.nn.FeedForwardNetwork.create(genome, config)
 
@@ -39,6 +39,7 @@ def eval_genome(genome, config, n_episodes):
     durations = []
     total_rewards = []
     final_rewards = []
+    final_distances = []
 
     genome_data = {
         "genome_id": genome.key,
@@ -55,57 +56,65 @@ def eval_genome(genome, config, n_episodes):
             "duration": 0,
             "total_rewards": 0,
         }
-        dict_obs, _ = env.reset()
+        obs_dict, _ = env.reset()
         observations, actions = [], []
+
+        obs = np.concatenate([
+            obs_dict["observation"],
+            obs_dict["desired_goal"] - obs_dict["achieved_goal"]])
+        done = False
+        initial_dist = np.linalg.norm(
+            obs_dict["desired_goal"] - obs_dict["achieved_goal"]
+        )
+        initial_dist_gripper = np.linalg.norm(obs_dict["achieved_goal"] - obs_dict["observation"][:3])
+
+        # avoid division by zero
+        initial_dist = max(initial_dist, 1e-8)
+        initial_dist_gripper = max(initial_dist_gripper, 1e-8)
+
+        ep_dist = []
         total_reward = 0
 
         for step in range(STEP_LIMIT):
-            obs = np.concatenate([dict_obs["observation"],dict_obs["desired_goal"] - dict_obs["achieved_goal"]])
             obs = normalize_observation(obs, range_vals, min_vals)
 
-            #observations.append(obs)
             action = np.clip(net.activate(obs), -1.0, 1.0)
-            #actions.append(action)
+            obs_dict, reward, terminated, truncated, info = env.step(action)
+            obs = np.concatenate([
+                obs_dict["observation"],
+                obs_dict["desired_goal"] - obs_dict["achieved_goal"]])
 
-            dict_obs, reward, terminated, truncated, info = env.step(action)
-
-            gripper_pos = dict_obs["observation"][:3]
-            object_pos = dict_obs["observation"][3:6]
-            goal_pos = dict_obs["desired_goal"]
-
-            object_to_goal = np.linalg.norm(goal_pos - object_pos)
-            gripper_to_object = np.linalg.norm(gripper_pos - object_pos)
-
-            lift_bonus = 1.0 if object_pos[2] > 0.45 else 0.0
-            success_bonus = 50.0 if reward >= -0.05 else 0.0
-
-            if lift_bonus > 0.0:
-                print(f"Genome {genome.key} lifted the object in episode {episode_id} at step {step}")
-
-            total_reward += (
-                -object_to_goal * 5.0
-                -gripper_to_object * 1.0
-                +lift_bonus
-                +success_bonus
+            dist = np.linalg.norm(
+                obs_dict["desired_goal"] - obs_dict["achieved_goal"]
             )
+            dist_gripper = np.linalg.norm(obs_dict["achieved_goal"] - obs_dict["observation"][:3])
 
+            if initial_dist < 0.05 and dist < 0.05:
+                norm_dist = 0.0
+            else:
+                norm_dist = dist / initial_dist
+            
+            if initial_dist_gripper < 0.05 and dist_gripper < 0.05:
+                norm_dist_gripper = 0.0
+            else:
+                norm_dist_gripper = dist_gripper / initial_dist_gripper
 
+            ep_dist.append(norm_dist)
+            
 
-            if terminated or truncated:
-                break
-
-        if reward >= -0.05:
+        if reward > -0.05:  
             success_count += 1
-            #total_reward += 100
-            #print(f"Genome {genome.key} Success in episode {episode_id} with reward {reward:.2f} and total_reward {total_reward:.2f}")
+            final_dist = norm_dist * 100
         else:
-            success = 0
+            final_dist = norm_dist * 100 + norm_dist_gripper * 10
 
+        final_distances.append(final_dist)
+
+        total_rewards.append(total_reward)
         final_rewards.append(reward)
 
         duration = step / env.metadata["render_fps"]
         durations.append(duration)
-        total_rewards.append(total_reward)
 
         #episode_data["observations"] = observations
         #episode_data["actions"] = actions
@@ -120,7 +129,8 @@ def eval_genome(genome, config, n_episodes):
     genome_data["total_rewards"] = float(np.mean(total_rewards))
 
     env.close()
-    return np.mean(total_rewards) * 10, genome_data #np.mean(total_rewards)
+    return -np.mean(final_distances), genome_data #np.mean(total_rewards)
+
 
 # --- Evaluate an entire population ---
 def eval_population(genomes, config, n_episodes):
@@ -234,7 +244,7 @@ def save_population_data_to_json(population_data):
     with open("dataset.json", "a") as f:
         f.write(json.dumps(data) + "\n")
 
-def load_limits(path="observation_limits_28_obs.json"):
+def load_limits(path="observation_limits_push.json"):
     with open(path, "r") as f:
         data = json.load(f)
 

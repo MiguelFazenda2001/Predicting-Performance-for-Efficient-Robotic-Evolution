@@ -53,7 +53,7 @@ def explore_observation_space(env, episodes=50, steps_per_episode=300):
 
 
 if __name__ == "__main__":
-    env = gym.make('FetchPickAndPlaceDense-v4', max_episode_steps=500)
+    env = gym.make('FetchPushDense-v4', max_episode_steps=500)
 
     results = explore_observation_space(env, episodes=25000, steps_per_episode=200)
 
@@ -66,7 +66,7 @@ if __name__ == "__main__":
     print(results["fixed_dimensions"])
 
     # Save to file
-    with open("observation_limits_13_obs_2.json", "w") as f:
+    with open("observation_limits_push.json", "w") as f:
         json.dump(results, f, indent=4)
 
-    print("\nSaved to observation_limits.json")
+    print("\nSaved to observation_limits_push.json")

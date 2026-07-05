@@ -38,14 +38,14 @@ STEP_LIMIT = 500
 
 if __name__ == "__main__":
 
-    """
+    
     os.makedirs(f"../neat_models/Predictive_VS_Fitness/30_total_episodes_10_episodes_sr_fitness_evolution", exist_ok=True)
     os.makedirs(f"../evolutionary_history/Predictive_VS_Fitness/30_total_episodes_10_episodes_sr_fitness_evolution", exist_ok=True)
     
     for i in range(25):
         print(f"Running sr fitness evolution {i+1}/25")
 
-        fitness_evolver = SRFitnessEvolution(num_generations=150, n_episodes_for_fitness=3, total_n_episodes=30, std=None, step_limit=STEP_LIMIT)
+        fitness_evolver = SRFitnessEvolution(num_generations=150, n_episodes_for_fitness=10, total_n_episodes=30, std=None, step_limit=STEP_LIMIT)
 
         fitness_evolutions_history = fitness_evolver.evolve("config-feedforward.txt", f"../neat_models/Predictive_VS_Fitness/30_total_episodes_10_episodes_sr_fitness_evolution/best_genome_sr_fitness_evolution_{i+1}.pkl")
 
@@ -78,6 +78,7 @@ if __name__ == "__main__":
             json_path = f"../evolutionary_history/Predictive_VS_Fitness/30_total_episodes_1_episodes_predictive_tcn_evolution/predictive_tcn_evolution_history_{i+1}.json"
             with open(json_path, "w") as f:
                 json.dump(predictive_evolutions_history, f, indent=4)
+    """
 
     
     

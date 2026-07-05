@@ -8,8 +8,8 @@ import numpy as np
 # ── Configuration ──────────────────────────────────────────────
 ENV_ID        = "FetchReachDense-v4"
 N_EPISODES    = 10       # evaluations per candidate
-POP_SIZE      = 50       # CMA-ES lambda (population size)
-MAX_GENS      = 200      # generations budget
+POP_SIZE      = 100       # CMA-ES lambda (population size)
+MAX_GENS      = 500      # generations budget
 SIGMA0        = 0.5      # initial step size
 ALPHA         = 0.3      # distance penalty weight in fitness
 HIDDEN        = 32       # hidden units in the controller MLP
@@ -44,7 +44,7 @@ class MLPController:
 
 
 # ── Fitness function ────────────────────────────────────────────
-def evaluate(params, env, controller, n_episodes=N_EPISODES):
+def evaluate(params, env, controller, range_vals, min_vals, n_episodes=N_EPISODES):
     """
     Returns scalar fitness (higher = better).
     fitness = success_rate - ALPHA * mean_goal_distance
@@ -58,19 +58,19 @@ def evaluate(params, env, controller, n_episodes=N_EPISODES):
         obs_dict, _ = env.reset()
         obs = np.concatenate([
             obs_dict["observation"],
-            obs_dict["desired_goal"],
-        ])
+            obs_dict["desired_goal"] - obs_dict["achieved_goal"]])
         done = False
         ep_dist = []
         total_reward = 0
 
         for _ in range(env._max_episode_steps):
+            obs = normalize_observation(obs, range_vals, min_vals)
+
             action = controller.act(obs)
             obs_dict, reward, terminated, truncated, info = env.step(action)
             obs = np.concatenate([
                 obs_dict["observation"],
-                obs_dict["desired_goal"],
-            ])
+                obs_dict["desired_goal"] - obs_dict["achieved_goal"]])
             # Distance to goal (Euclidean, from achieved vs desired)
             dist = np.linalg.norm(
                 obs_dict["achieved_goal"] - obs_dict["desired_goal"]
@@ -88,6 +88,26 @@ def evaluate(params, env, controller, n_episodes=N_EPISODES):
     fitness      = np.mean(total_rewards) * 10#success_rate - ALPHA * mean_dist
     return fitness, success_rate   # CMA-ES minimises, so we negate below
 
+def load_limits(path="observation_limits_13_obs.json"):
+    with open(path, "r") as f:
+        data = json.load(f)
+
+    min_vals = np.array(data["min"])
+    max_vals = np.array(data["max"])
+
+    range_vals = max_vals - min_vals
+    range_vals[range_vals == 0] = 1e-8
+
+    return range_vals, min_vals
+
+def normalize_observation(obs, range_vals, min_vals):
+    # scale to [0,1]
+    norm = (obs - min_vals) / range_vals
+
+    # scale to [-1,1]
+    norm = norm * 2.0 - 1.0
+
+    return norm
 
 # ── Main evolution loop ─────────────────────────────────────────
 def main():
@@ -96,8 +116,11 @@ def main():
 
     # Infer obs and action dims from the environment
     obs_dict, _ = env.reset()
-    obs_dim = len(obs_dict["observation"]) + len(obs_dict["desired_goal"])
+    obs_dim = len(obs_dict["observation"]) + len(obs_dict["desired_goal"] - obs_dict["achieved_goal"])
     act_dim = env.action_space.shape[0]
+
+    # Load observation limits
+    range_vals, min_vals = load_limits()
 
     controller = MLPController(obs_dim, act_dim)
     print(f"Controller params: {controller.n_params}")
@@ -125,7 +148,7 @@ def main():
         i = 0
 
         for params in solutions:
-            f, success_rate = evaluate(params, env, controller)
+            f, success_rate = evaluate(params, env, controller, range_vals, min_vals)
             data.append({
                 "generation": generation,
                 "solution_id": i,

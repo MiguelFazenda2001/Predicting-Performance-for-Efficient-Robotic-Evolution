@@ -73,12 +73,22 @@ class ResidualEpisodeTCN(nn.Module):
         return sum_x / (count + 1e-8)  # avoid division by zero    
 
     def forward(self, x, mask):
+        B, E, T, F = x.shape
+
+        # merge batch and episodes
+        x = x.view(B * E, T, F)
+        mask = mask.view(B * E, T)
+        
         x = x.transpose(1, 2)  # (B, F, T)
         x = self.tcn(x)
         x = self.masked_mean(x,mask)
         s = self.success_head(x)
         d = self.duration_head(x)
-        return torch.cat([s, d], dim=1)
+        out = torch.cat([s, d], dim=1)   # (B*E, 2)
+        out = out.view(B, E, 2)
+        out = out.mean(dim=1)            # (B, 2)
+
+        return out
 
 
 class EpisodeDataset(Dataset):

@@ -26,21 +26,21 @@ def load_data(file_paths, label):
 
     return rows
 
-_10_episodes_fitness_files = glob.glob("/mnt/DATA/miguelfazenda/reach/evolution/evolutionary_history/30_total_episodes_10_episodes_fitness_evolution_300_gens/*.json")
+_10_episodes_fitness_files = glob.glob("../evolutionary_history/30_total_episodes_10_episodes_fitness_evolution_300_gens/*.json")
 
-_3_episodes_fitness_files = glob.glob("/mnt/DATA/miguelfazenda/reach/evolution/evolutionary_history/30_total_episodes_3_episodes_fitness_evolution_300_gens/*.json")
-_3_episodes_predictive_files = glob.glob("/mnt/DATA/miguelfazenda/reach/evolution/evolutionary_history/30_total_episodes_3_episodes_predictive_evolution_300_gens/*.json")
+_3_episodes_fitness_files = glob.glob("../evolutionary_history/30_total_episodes_3_episodes_fitness_evolution_300_gens/*.json")
+_3_episodes_predictive_files = glob.glob("../evolutionary_history/30_total_episodes_3_episodes_predictive_evolution_300_gens/*.json")
 
-_1_episodes_fitness_files = glob.glob("/mnt/DATA/miguelfazenda/reach/evolution/evolutionary_history/30_total_episodes_1_episodes_fitness_evolution_300_gens/*.json")
-_1_episodes_predictive_files = glob.glob("/mnt/DATA/miguelfazenda/reach/evolution/evolutionary_history/30_total_episodes_1_episodes_predictive_evolution_300_gens/*.json")
+_1_episodes_fitness_files = glob.glob("../evolutionary_history/30_total_episodes_1_episodes_fitness_evolution_300_gens/*.json")
+_1_episodes_predictive_files = glob.glob("../evolutionary_history/30_total_episodes_1_episodes_predictive_evolution_300_gens/*.json")
 
 
 df = pd.DataFrame(
-    load_data(_10_episodes_fitness_files, " Fitness-based Evolution (10 episodes)") +
-    load_data(_3_episodes_fitness_files, "Fitness-based Evolution (3 episodes)") +
-    load_data(_3_episodes_predictive_files, "Predictive-based Evolution (3 episodes)") +
-    load_data(_1_episodes_fitness_files, "Fitness-based Evolution (1 episode)") +
-    load_data(_1_episodes_predictive_files, "Predictive-based Evolution (1 episode)")
+    load_data(_10_episodes_fitness_files, " Fitness Evolution (10 episodes)") +
+    load_data(_3_episodes_fitness_files, "Fitness Evolution (3 episodes)") +
+    load_data(_3_episodes_predictive_files, "Predictive Evolution (3 episodes)") +
+    load_data(_1_episodes_fitness_files, "Fitness Evolution (1 episode)") +
+    load_data(_1_episodes_predictive_files, "Predictive Evolution (1 episode)")
 )
 
 last_gen_numbers = (
@@ -67,23 +67,23 @@ df_best_last = (
 
 # Filter only the 10-episode fitness runs
 ten_episode_results = df_best_last[
-    df_best_last["type"] == " Fitness-based Evolution (10 episodes)"
+    df_best_last["type"] == " Fitness Evolution (10 episodes)"
 ]
 
 one_episode_results = df_best_last[
-    df_best_last["type"] == "Fitness-based Evolution (1 episode)"
+    df_best_last["type"] == "Fitness Evolution (1 episode)"
 ]
 
 three_episode_results = df_best_last[
-    df_best_last["type"] == "Fitness-based Evolution (3 episodes)"
+    df_best_last["type"] == "Fitness Evolution (3 episodes)"
 ]
 
 one_predictive_results = df_best_last[
-    df_best_last["type"] == "Predictive-based Evolution (1 episode)"
+    df_best_last["type"] == "Predictive Evolution (1 episode)"
 ]
 
 three_predictive_results = df_best_last[
-    df_best_last["type"] == "Predictive-based Evolution (3 episodes)"
+    df_best_last["type"] == "Predictive Evolution (3 episodes)"
 ]   
 
 # Print success rates
